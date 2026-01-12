@@ -8,6 +8,8 @@ Hytale uses **QUIC over UDP** (not TCP). Publish `5520/udp`.
 services:
   hytale:
     image: ghcr.io/hybrowse/hytale-server:latest
+    environment:
+      HYTALE_AUTO_DOWNLOAD: "true"
     ports:
       - "5520:5520/udp"
     volumes:
@@ -43,23 +45,7 @@ docker compose up -d --pull always
 
 This image runs the official Hytale dedicated server binaries from a persistent volume.
 
-Expected layout:
-
-- `./data/Assets.zip`
-- `./data/server/HytaleServer.jar`
-
-If those files are missing, the container will exit with a clear error message.
-
-### Best UX: opt-in auto-download
-
-If you prefer fewer manual steps, you can opt in to automatic download & extraction:
-
-```yaml
-services:
-  hytale:
-    environment:
-      HYTALE_AUTO_DOWNLOAD: "true"
-```
+### Recommended default: auto-download
 
 On first run, the official downloader will print an authorization URL + device code.
 After you complete the browser flow, the container will download the game package and extract:
@@ -79,14 +65,42 @@ Downloader credentials are stored on the `/data` volume as:
 
 On subsequent runs, the download flow should be non-interactive.
 
+If you want fully non-interactive automation, you can seed credentials (mount a credentials file read-only):
+
+- See [`configuration.md`](configuration.md#non-interactive-auto-download-seed-credentials)
+
 Auto-download details:
 
 - The downloader is fetched from `https://downloader.hytale.com/hytale-downloader.zip`.
 - Currently, auto-download is supported on `linux/amd64` only.
 
-### Manual provisioning (no auto-download)
+If you are running Docker on an arm64 host (for example Apple Silicon), you have two options:
+
+- Run the container as `linux/amd64`:
+
+  ```yaml
+  services:
+    hytale:
+      platform: linux/amd64
+  ```
+
+  This uses emulation on many arm64 hosts and may be slower.
+  See also: [`development.md`](development.md)
+
+- Or disable auto-download and provision files manually (see below).
+
+### Manual provisioning (opt-out / no auto-download)
 
 If you prefer to skip auto-download, you can provide the files yourself.
+
+Disable auto-download:
+
+```yaml
+services:
+  hytale:
+    environment:
+      HYTALE_AUTO_DOWNLOAD: "false"
+```
 
 To obtain `Assets.zip` and the `Server/` folder, follow:
 
@@ -125,11 +139,9 @@ This image uses **Adoptium / Eclipse Temurin 25**.
 
 ## First-time authentication
 
-In the server console:
+On first run (with `HYTALE_AUTO_DOWNLOAD=true`), the official downloader prints an authorization URL + device code in the container logs.
 
-```text
-/auth login device
-```
+Open the URL in your browser and complete the flow.
 
 ## Server console (interactive)
 

@@ -49,9 +49,9 @@ task dev:logs
 task dev:down
 ```
 
-## Opt-in auto-download workflow
+## Auto-download workflow
 
-If you prefer fewer manual steps, you can start the container with auto-download enabled:
+To avoid manual provisioning steps, you can start the container with auto-download enabled:
 
 ```bash
 task dev:up:auto
@@ -62,6 +62,17 @@ Notes:
 - First run may require device-code authorization (watch logs).
 - Credentials will be stored on the `./data` volume.
 - Auto-download currently works on `linux/amd64` only.
+
+## Apple Silicon (arm64) note: running the amd64 container
+
+On macOS Apple Silicon (arm64), the official downloader inside the container is not available as `linux/arm64`.
+To use `HYTALE_AUTO_DOWNLOAD=true` locally, run the container as `linux/amd64`:
+
+```bash
+task dev:up:auto:amd64
+```
+
+This uses `docker buildx` to build an `amd64` image and runs the container with `--platform linux/amd64`.
 
 ## Server console (interactive)
 

@@ -30,6 +30,8 @@ Hytale uses **QUIC over UDP** (not TCP). Publish `5520/udp`.
 services:
   hytale:
     image: ghcr.io/hybrowse/hytale-server:latest
+    environment:
+      HYTALE_AUTO_DOWNLOAD: "true"
     ports:
       - "5520:5520/udp"
     volumes:
@@ -55,9 +57,9 @@ docker compose pull
 docker compose up -d
 ```
 
-Optional: opt in to automatic download of `Assets.zip` and server files (best UX):
+Recommended default: automatic download of `Assets.zip` and server files (best UX):
 
-- Set `HYTALE_AUTO_DOWNLOAD=true`
+- Set `HYTALE_AUTO_DOWNLOAD=true` (already included above)
 - Follow the device-code link shown in logs on first run
 
 Auto-download details:
@@ -65,14 +67,21 @@ Auto-download details:
 - Downloader source: `https://downloader.hytale.com/hytale-downloader.zip`
 - Currently supported on `linux/amd64` only
 
-Manual provisioning (no auto-download):
+If you are running Docker on an arm64 host (for example Apple Silicon), you have two options:
 
+- Run the container as `linux/amd64` (Compose: `platform: linux/amd64`)
+- Or set `HYTALE_AUTO_DOWNLOAD=false` and provision files manually (see below)
+
+Manual provisioning (opt-out / no auto-download):
+
+- Set `HYTALE_AUTO_DOWNLOAD=false`
 - Get `Assets.zip` + the `Server/` folder via:
   - [`docs/image/server-files.md`](docs/image/server-files.md)
 - Create `./data/server/`
 - Put `Assets.zip` at `./data/Assets.zip`
 - Copy the contents of `Server/` into `./data/server/` (at minimum `./data/server/HytaleServer.jar`)
-- Start and check logs if needed:
+
+Start and check logs if needed:
 
 ```bash
 docker compose up -d
@@ -86,11 +95,9 @@ Next:
 
 ## First-time authentication
  
-In the server console:
- 
-```text
-/auth login device
-```
+When using `HYTALE_AUTO_DOWNLOAD=true`, the official downloader will print an authorization URL + device code in the container logs on first run.
+
+Follow that URL in your browser to authenticate.
 
 ## Server console (interactive)
 

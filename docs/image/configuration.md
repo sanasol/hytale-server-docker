@@ -5,7 +5,7 @@
 The official Hytale server requires Java 25.
 This image uses **Adoptium / Eclipse Temurin 25** (`eclipse-temurin:25-jre`).
 
-## Opt-in auto-download (best UX)
+## Auto-download (recommended)
 
 If `HYTALE_AUTO_DOWNLOAD=true` and `Assets.zip` / `HytaleServer.jar` are missing, the container will:
 
@@ -21,12 +21,16 @@ Credentials are stored as:
 
 If that file already exists (for example from a previous run), downloads become non-interactive.
 
+If you want fully non-interactive automation, see: [Non-interactive auto-download (seed credentials)](#non-interactive-auto-download-seed-credentials)
+
 For safety, `HYTALE_DOWNLOADER_URL` is restricted to `https://downloader.hytale.com/`.
 
 Current limitation:
 
 - Auto-download is supported on `linux/amd64` only, because the official downloader archive currently does not include a `linux/arm64` binary.
 - On `linux/arm64`, you must provide the server files and `Assets.zip` manually.
+
+On arm64 hosts (for example Apple Silicon), you can also run the container as `linux/amd64` (Compose: `platform: linux/amd64`).
 
 ## Environment variables
 
@@ -52,6 +56,7 @@ Current limitation:
 | `HYTALE_DOWNLOADER_CREDENTIALS_SRC` | *(empty)* | Optional path to a mounted credentials file to seed `/data/.hytale-downloader-credentials.json`. |
 | `HYTALE_GAME_ZIP_PATH` | `/data/game.zip` | Where the downloader stores the downloaded game package zip. |
 | `HYTALE_KEEP_GAME_ZIP` | `false` | If `true`, keep the downloaded game zip after extraction. |
+| `HYTALE_DOWNLOAD_LOCK` | `true` | If `false`, disables the download lock (power users). Keeping the lock enabled prevents concurrent downloads into the same `/data` volume. |
 | `JVM_XMS` | *(empty)* | Passed as `-Xms...` (initial heap). |
 | `JVM_XMX` | *(empty)* | Passed as `-Xmx...` (max heap). |
 | `JVM_EXTRA_ARGS` | *(empty)* | Extra JVM args appended to the `java` command. |
@@ -70,6 +75,8 @@ services:
 ```
 
 ### Disable Sentry
+
+The official documentation recommends disabling Sentry during active plugin development so that your errors are not reported to the Hytale team.
 
 ```yaml
 services:
