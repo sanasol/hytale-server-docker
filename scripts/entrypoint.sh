@@ -19,6 +19,31 @@ log() {
 DATA_DIR="/data"
 SERVER_DIR="/data/server"
 
+check_data_writable() {
+  if [ ! -w "${DATA_DIR}" ]; then
+    log "ERROR: Cannot write to ${DATA_DIR}"
+    log "ERROR: The /data volume must be writable by UID $(id -u)."
+    log "ERROR: Fix: 'sudo chown -R $(id -u):$(id -g) <host-path>'"
+    log "ERROR: See https://github.com/Hybrowse/hytale-server-docker/blob/main/docs/image/troubleshooting.md"
+    exit 1
+  fi
+}
+
+check_dir_writable() {
+  dir="$1"
+  if [ ! -w "${dir}" ]; then
+    log "ERROR: Cannot write to ${dir}"
+    log "ERROR: Directory exists but is not writable by UID $(id -u)."
+    log "ERROR: Current owner: $(ls -ld "${dir}" 2>/dev/null | awk '{print $3":"$4}')"
+    log "ERROR: Fix: 'sudo chown -R $(id -u):$(id -g) <host-path>'"
+    log "ERROR: Or delete the directory and let the container recreate it."
+    log "ERROR: See https://github.com/Hybrowse/hytale-server-docker/blob/main/docs/image/troubleshooting.md"
+    exit 1
+  fi
+}
+
+check_data_writable
+
 HYTALE_SERVER_JAR="${HYTALE_SERVER_JAR:-${SERVER_DIR}/HytaleServer.jar}"
 HYTALE_ASSETS_PATH="${HYTALE_ASSETS_PATH:-${DATA_DIR}/Assets.zip}"
 HYTALE_AOT_PATH="${HYTALE_AOT_PATH:-${SERVER_DIR}/HytaleServer.aot}"
@@ -65,6 +90,7 @@ HYTALE_MACHINE_ID="${HYTALE_MACHINE_ID:-}"
 user_args="$*"
 
 mkdir -p "${SERVER_DIR}"
+check_dir_writable "${SERVER_DIR}"
 
 setup_machine_id() {
   MACHINE_ID_FILE="/etc/machine-id"
@@ -91,7 +117,7 @@ setup_machine_id() {
     exit 1
   fi
 
-  printf '%s\n' "${machine_id}" > "${MACHINE_ID_FILE}" 2>/dev/null || true
+  ( printf '%s\n' "${machine_id}" > "${MACHINE_ID_FILE}" ) 2>/dev/null || true
   printf '%s\n' "${machine_id}" > "${MACHINE_ID_PERSISTENT}" 2>/dev/null || true
 }
 

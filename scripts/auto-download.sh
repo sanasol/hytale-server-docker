@@ -19,6 +19,19 @@ is_true() {
 DATA_DIR="${DATA_DIR:-/data}"
 SERVER_DIR="${SERVER_DIR:-/data/server}"
 
+check_dir_writable() {
+  dir="$1"
+  if [ ! -w "${dir}" ]; then
+    log "ERROR: Cannot write to ${dir}"
+    log "ERROR: Directory exists but is not writable by UID $(id -u)."
+    log "ERROR: Current owner: $(ls -ld "${dir}" 2>/dev/null | awk '{print $3":"$4}')"
+    log "ERROR: Fix: 'sudo chown -R $(id -u):$(id -g) <host-path>'"
+    log "ERROR: Or delete the directory and let the container recreate it."
+    log "ERROR: See https://github.com/Hybrowse/hytale-server-docker/blob/main/docs/image/troubleshooting.md"
+    exit 1
+  fi
+}
+
 HYTALE_SERVER_JAR="${HYTALE_SERVER_JAR:-${SERVER_DIR}/HytaleServer.jar}"
 HYTALE_ASSETS_PATH="${HYTALE_ASSETS_PATH:-${DATA_DIR}/Assets.zip}"
 
@@ -34,7 +47,9 @@ HYTALE_AUTO_UPDATE="${HYTALE_AUTO_UPDATE:-true}"
 HYTALE_VERSION_FILE="${HYTALE_VERSION_FILE:-${DATA_DIR}/.hytale-version}"
 
 mkdir -p "${SERVER_DIR}"
+check_dir_writable "${SERVER_DIR}"
 mkdir -p "${HYTALE_DOWNLOADER_DIR}"
+check_dir_writable "${HYTALE_DOWNLOADER_DIR}"
 
 # Lock to avoid multiple containers downloading into the same volume simultaneously.
 LOCK_DIR="${DATA_DIR}/.hytale-download-lock"
@@ -224,7 +239,13 @@ unzip -o "${HYTALE_GAME_ZIP_PATH}" 'Server/*' -d "${tmp_extract_dir}" >/dev/null
 
 if [ -d "${tmp_extract_dir}/Server" ]; then
   mkdir -p "${SERVER_DIR}"
-  cp -a "${tmp_extract_dir}/Server/." "${SERVER_DIR}/"
+  if ! cp -r "${tmp_extract_dir}/Server/." "${SERVER_DIR}/"; then
+    log "ERROR: Failed to copy server files to ${SERVER_DIR}/"
+    log "ERROR: This usually means the directory has wrong permissions."
+    log "ERROR: Fix: ensure ${SERVER_DIR} is owned by UID 1000 (e.g., 'sudo chown -R 1000:1000 ${SERVER_DIR}')"
+    log "ERROR: See https://github.com/Hybrowse/hytale-server-docker/blob/main/docs/image/troubleshooting.md"
+    exit 1
+  fi
 fi
 
 rm -rf "${tmp_extract_dir}" 2>/dev/null || true

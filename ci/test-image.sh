@@ -230,5 +230,58 @@ pass "HYTALE_MACHINE_ID can override machine-id"
 
 rm -rf "${workdir5}"
 
+# Test 9: permission check fails when /data is not writable
+# Note: We can't use :ro mount because Docker's WORKDIR fails before entrypoint runs.
+# Instead, create a directory owned by root that the container user (1000) cannot write to.
+workdir6="$(mktemp -d)"
+mkdir -p "${workdir6}/server"
+chmod 0777 "${workdir6}/server"
+chmod 0555 "${workdir6}"
+set +e
+out="$(docker run --rm -v "${workdir6}:/data" "${IMAGE_NAME}" 2>&1)"
+status=$?
+set -e
+[ ${status} -ne 0 ] || fail "expected non-zero exit status when /data is not writable"
+echo "${out}" | grep -q "Cannot write to /data" || fail "expected /data not writable error"
+echo "${out}" | grep -q "troubleshooting.md" || fail "expected troubleshooting docs link"
+pass "permission check fails when /data is not writable"
+chmod 0755 "${workdir6}"
+rm -rf "${workdir6}"
+
+# Test 10: permission check fails when /data/server exists but is not writable
+workdir7="$(mktemp -d)"
+chmod 0777 "${workdir7}"
+mkdir -p "${workdir7}/server"
+chmod 0555 "${workdir7}/server"
+set +e
+out="$(docker run --rm -v "${workdir7}:/data" "${IMAGE_NAME}" 2>&1)"
+status=$?
+set -e
+[ ${status} -ne 0 ] || fail "expected non-zero exit status when /data/server is not writable"
+echo "${out}" | grep -q "Cannot write to /data/server" || fail "expected /data/server not writable error"
+echo "${out}" | grep -q "Current owner:" || fail "expected current owner info in error"
+echo "${out}" | grep -q "troubleshooting.md" || fail "expected troubleshooting docs link"
+pass "permission check fails when /data/server is not writable"
+chmod 0755 "${workdir7}/server"
+rm -rf "${workdir7}"
+
+# Test 11: read-only root filesystem does not cause machine-id error output
+workdir8="$(mktemp -d)"
+chmod 0777 "${workdir8}"
+mkdir -p "${workdir8}/server"
+: > "${workdir8}/Assets.zip"
+: > "${workdir8}/server/HytaleServer.jar"
+set +e
+out="$(docker run --rm --read-only --tmpfs /tmp -v "${workdir8}:/data" "${IMAGE_NAME}" 2>&1)"
+status=$?
+set -e
+[ ${status} -ne 0 ] || fail "expected java to fail with dummy jar"
+if echo "${out}" | grep -q "cannot create /etc/machine-id"; then
+  fail "machine-id error should be suppressed on read-only root filesystem"
+fi
+[ -f "${workdir8}/.machine-id" ] || fail "expected .machine-id to be created on /data"
+pass "read-only root filesystem does not cause machine-id error output"
+rm -rf "${workdir8}"
+
 rm -rf "${workdir}"
 pass "all tests"

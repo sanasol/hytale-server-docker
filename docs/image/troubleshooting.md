@@ -114,6 +114,29 @@ services:
 > [!WARNING]
 > Avoid running as root (`user: "0:0"`) in production.
 
+## Read-only root filesystem
+
+**Symptom:** When running with a read-only root filesystem:
+
+```text
+cannot create /etc/machine-id: Read-only file system
+```
+
+**Cause:** The container attempts to write a machine-id to `/etc/machine-id` for the Hytale downloader's OAuth flow.
+
+**Fix:** This warning is harmless. The machine-id is also persisted to `/data/.machine-id` and will be reused on subsequent starts. No action needed.
+
+If you see other errors related to read-only filesystem, ensure you mount a writable `/tmp`:
+
+```yaml
+services:
+  hytale:
+    volumes:
+      - /path/to/data:/data
+    tmpfs:
+      - /tmp
+```
+
 ## Container exits immediately with "Missing server jar" or "Missing assets"
 
 **Symptom:** Container exits with clear error messages about missing files.
