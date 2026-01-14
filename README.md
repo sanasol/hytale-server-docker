@@ -2,7 +2,7 @@
  
 **🐳 Production-ready Docker image for dedicated Hytale servers.**
 
-Auto-download with smart update detection, **automatic CurseForge mod management**, easy configuration via environment variables, built-in backup support, and clear error messages for quick troubleshooting.
+Automatic CurseForge mod management, auto-download with smart update detection, easy configuration, built-in backup support, and quick troubleshooting.
 
 Brought to you by [Hybrowse](https://hybrowse.gg) and the developer of [setupmc.com](https://setupmc.com).
 
