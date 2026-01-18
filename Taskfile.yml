@@ -89,14 +89,14 @@ tasks:
     cmds:
       - task: build
       - docker rm -f {{.DEV_CONTAINER_NAME}} 2>/dev/null || true
-      - docker run -d -it --name {{.DEV_CONTAINER_NAME}} -e HYTALE_AUTO_DOWNLOAD=true -p {{.DEV_PORT}}:5520/udp -v {{.DEV_DATA_DIR}}:/data {{.IMAGE_NAME}}
+      - docker run -d -it --name {{.DEV_CONTAINER_NAME}} -e CFG_MOTD=Test -e HYTALE_AUTO_DOWNLOAD=true -p {{.DEV_PORT}}:5520/udp -v {{.DEV_DATA_DIR}}:/data {{.IMAGE_NAME}}
 
   dev:up:auto:amd64:
     desc: Start a local server container as linux/amd64 with HYTALE_AUTO_DOWNLOAD=true
     cmds:
       - task: build:amd64
       - docker rm -f {{.DEV_CONTAINER_NAME}} 2>/dev/null || true
-      - docker run -d -it --platform linux/amd64 --name {{.DEV_CONTAINER_NAME}} -e HYTALE_AUTO_DOWNLOAD=true -p {{.DEV_PORT}}:5520/udp -v {{.DEV_DATA_DIR}}:/data {{.IMAGE_NAME_AMD64}}
+      - docker run -d -it --platform linux/amd64 --name {{.DEV_CONTAINER_NAME}} -e CFG_MOTD=Test -e HYTALE_AUTO_DOWNLOAD=true -p {{.DEV_PORT}}:5520/udp -v {{.DEV_DATA_DIR}}:/data {{.IMAGE_NAME_AMD64}}
 
   dev:up:curseforge:
     desc: Start a local server container with CurseForge mod auto-download (requires CURSEFORGE_API_KEY env var or ./.secrets/curseforge_api_key.txt)
@@ -106,6 +106,7 @@ tasks:
       - |
         if [ -f ./.secrets/curseforge_api_key.txt ]; then
           docker run -d -it --name {{.DEV_CONTAINER_NAME}} \
+            -e CFG_MOTD=Test \
             -e HYTALE_AUTO_DOWNLOAD=true \
             -e HYTALE_CURSEFORGE_MODS="1428599 1409811" \
             -e HYTALE_CURSEFORGE_API_KEY_SRC=/run/secrets/curseforge_api_key \
@@ -115,6 +116,7 @@ tasks:
             {{.IMAGE_NAME}}
         elif [ -n "${CURSEFORGE_API_KEY:-}" ]; then
           docker run -d -it --name {{.DEV_CONTAINER_NAME}} \
+            -e CFG_MOTD=Test \
             -e HYTALE_AUTO_DOWNLOAD=true \
             -e HYTALE_CURSEFORGE_MODS="1428599 1409811" \
             -e HYTALE_CURSEFORGE_API_KEY="${CURSEFORGE_API_KEY}" \
@@ -134,6 +136,7 @@ tasks:
       - |
         if [ -f ./.secrets/curseforge_api_key.txt ]; then
           docker run -d -it --platform linux/amd64 --name {{.DEV_CONTAINER_NAME}} \
+            -e CFG_MOTD=Test \
             -e HYTALE_AUTO_DOWNLOAD=true \
             -e HYTALE_CURSEFORGE_MODS="1428599 1409811" \
             -e HYTALE_CURSEFORGE_API_KEY_SRC=/run/secrets/curseforge_api_key \
@@ -143,6 +146,7 @@ tasks:
             {{.IMAGE_NAME_AMD64}}
         elif [ -n "${CURSEFORGE_API_KEY:-}" ]; then
           docker run -d -it --platform linux/amd64 --name {{.DEV_CONTAINER_NAME}} \
+            -e CFG_MOTD=Test \
             -e HYTALE_AUTO_DOWNLOAD=true \
             -e HYTALE_CURSEFORGE_MODS="1428599 1409811" \
             -e HYTALE_CURSEFORGE_API_KEY="${CURSEFORGE_API_KEY}" \
@@ -171,14 +175,14 @@ tasks:
     cmds:
       - task: build
       - docker rm -f {{.DEV_CONTAINER_NAME}} 2>/dev/null || true
-      - docker run -d -it --name {{.DEV_CONTAINER_NAME}} -e ENABLE_AOT=true -e JVM_EXTRA_ARGS=-Xlog:aot=trace -p {{.DEV_PORT}}:5520/udp -v {{.DEV_DATA_DIR}}:/data {{.IMAGE_NAME}}
+      - docker run -d -it --name {{.DEV_CONTAINER_NAME}} -e CFG_MOTD=Test -e ENABLE_AOT=true -e JVM_EXTRA_ARGS=-Xlog:aot=trace -p {{.DEV_PORT}}:5520/udp -v {{.DEV_DATA_DIR}}:/data {{.IMAGE_NAME}}
 
   dev:up:aot:amd64:
     desc: Start a local server container as linux/amd64 with AOT enabled and verbose AOT logging (requires generated AOT cache)
     cmds:
       - task: build:amd64
       - docker rm -f {{.DEV_CONTAINER_NAME}} 2>/dev/null || true
-      - docker run -d -it --platform linux/amd64 --name {{.DEV_CONTAINER_NAME}} -e ENABLE_AOT=true -e JVM_EXTRA_ARGS=-Xlog:aot=trace -p {{.DEV_PORT}}:5520/udp -v {{.DEV_DATA_DIR}}:/data {{.IMAGE_NAME_AMD64}}
+      - docker run -d -it --platform linux/amd64 --name {{.DEV_CONTAINER_NAME}} -e CFG_MOTD=Test -e ENABLE_AOT=true -e JVM_EXTRA_ARGS=-Xlog:aot=trace -p {{.DEV_PORT}}:5520/udp -v {{.DEV_DATA_DIR}}:/data {{.IMAGE_NAME_AMD64}}
 
   dev:down:
     desc: Stop and remove the local server container
