@@ -1,0 +1,17 @@
+{{- if .Values.podDisruptionBudget.enabled -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "hytale-server.fullname" . }}
+  labels:
+    {{- include "hytale-server.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "hytale-server.selectorLabels" . | nindent 6 }}
+  {{- if not (eq .Values.podDisruptionBudget.minAvailable nil) }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- else if not (eq .Values.podDisruptionBudget.maxUnavailable nil) }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+{{- end }}

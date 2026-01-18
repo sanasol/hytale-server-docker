@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - pdb.yaml
+  - networkpolicy.yaml
+
+patches:
+  - target:
+      kind: StatefulSet
+      name: hytale-server
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes
+        value:
+          - name: tmp
+            emptyDir:
+              medium: Memory
+      - op: add
+        path: /spec/volumeClaimTemplates
+        value:
+          - metadata:
+              name: data
+            spec:
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 5Gi
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HYTALE_ENABLE_BACKUP
+          value: "true"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HYTALE_BACKUP_DIR
+          value: "/data/backups"

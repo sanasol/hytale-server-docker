@@ -20,6 +20,7 @@ It should **not** be used to redistribute proprietary server binaries.
 
 - Start here: [`quickstart.md`](quickstart.md)
 - Then: [`configuration.md`](configuration.md)
+- Kubernetes: [`kubernetes.md`](kubernetes.md)
 - Mods (CurseForge): [`curseforge-mods.md`](curseforge-mods.md)
 - Common issues: [`troubleshooting.md`](troubleshooting.md)
 - Ops: [`backups.md`](backups.md)

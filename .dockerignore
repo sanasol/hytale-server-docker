@@ -5,6 +5,7 @@
  data
 .secrets
  docs
+ deploy
  
  .DS_Store
  *.log

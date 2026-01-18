@@ -61,6 +61,7 @@ See: [`docs/image/configuration.md`](docs/image/configuration.md#send-console-co
 
 - [`docs/image/quickstart.md`](docs/image/quickstart.md) — start here
 - [`docs/image/configuration.md`](docs/image/configuration.md) — environment variables, JVM tuning
+- [`docs/image/kubernetes.md`](docs/image/kubernetes.md) — Helm chart, Kustomize overlays, and Kubernetes deployment notes
 - [`docs/image/curseforge-mods.md`](docs/image/curseforge-mods.md) — automatic CurseForge mod download and updates
 - [`docs/image/troubleshooting.md`](docs/image/troubleshooting.md) — common issues
 - [`docs/image/backups.md`](docs/image/backups.md) — backup configuration

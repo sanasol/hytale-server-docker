@@ -18,3 +18,8 @@ jobs:
         run: |
           chmod +x ci/test-image.sh
           IMAGE_NAME=hytale-server:test ./ci/test-image.sh
+
+      - name: Run Kubernetes manifest validation tests
+        run: |
+          chmod +x ci/test-k8s-manifests.sh
+          ./ci/test-k8s-manifests.sh

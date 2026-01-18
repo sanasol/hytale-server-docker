@@ -27,11 +27,18 @@ tasks:
       - chmod +x ci/test-image.sh
       - IMAGE_NAME={{.IMAGE_NAME}} ./ci/test-image.sh
 
+  k8s:test:
+    desc: Validate Helm + Kustomize manifests via kubeconform (runs tools in Docker)
+    cmds:
+      - chmod +x ci/test-k8s-manifests.sh
+      - ./ci/test-k8s-manifests.sh
+
   verify:
     desc: Build + run validation tests
     cmds:
       - task: build
       - task: test
+      - task: k8s:test
 
   dev:up:
     desc: Start a local server container (manual provisioning in ./data)

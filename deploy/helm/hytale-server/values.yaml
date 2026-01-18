@@ -1,0 +1,114 @@
+replicaCount: 1
+
+workload:
+  kind: StatefulSet
+
+image:
+  repository: hybrowse/hytale-server
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automount: false
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 5520
+  nodePort: null
+  loadBalancerIP: ""
+  loadBalancerSourceRanges: []
+  externalTrafficPolicy: ""
+  annotations: {}
+
+persistence:
+  enabled: true
+  existingClaim: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 5Gi
+  storageClassName: ""
+  annotations: {}
+
+tmp:
+  enabled: true
+  emptyDir:
+    medium: Memory
+
+terminationGracePeriodSeconds: 120
+
+resources: {}
+
+env: {}
+
+secrets:
+  serverAuth:
+    name: ""
+    sessionTokenKey: ""
+    identityTokenKey: ""
+
+  curseforge:
+    name: ""
+    apiKeyKey: ""
+    mountPath: /run/secrets
+    fileName: curseforge_api_key
+
+  downloaderCredentials:
+    name: ""
+    credentialsKey: ""
+    mountPath: /run/secrets
+    fileName: hytale-downloader-credentials.json
+
+envFrom: []
+
+command: []
+args: []
+
+extraVolumeMounts: []
+extraVolumes: []
+extraInitContainers: []
+extraContainers: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: null
+  maxUnavailable: 1
+
+networkPolicy:
+  enabled: false
+  ingress:
+    - from: []
+      ports:
+        - protocol: UDP
+          port: 5520
+  egress: []

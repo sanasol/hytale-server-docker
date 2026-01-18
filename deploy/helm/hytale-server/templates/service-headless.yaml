@@ -1,0 +1,19 @@
+{{- if eq .Values.workload.kind "StatefulSet" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hytale-server.fullname" . }}-headless
+  labels:
+    {{- include "hytale-server.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: quic
+      port: {{ .Values.service.port }}
+      protocol: UDP
+      targetPort: quic
+  selector:
+    {{- include "hytale-server.selectorLabels" . | nindent 4 }}
+
+{{- end }}

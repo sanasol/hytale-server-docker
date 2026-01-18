@@ -1,0 +1,8 @@
+.DS_Store
+.git/
+.github/
+ci/
+docs/
+scripts/
+Taskfile.yml
+*.md

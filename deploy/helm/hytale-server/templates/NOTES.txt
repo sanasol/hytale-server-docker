@@ -1,0 +1,27 @@
+Release "{{ .Release.Name }}" has been deployed.
+
+Resources:
+  Service (UDP): {{ include "hytale-server.fullname" . }}:{{ .Values.service.port }}
+  StatefulSet:   {{ include "hytale-server.fullname" . }}
+
+Persistence:
+  /data is backed by a PersistentVolumeClaim when persistence.enabled=true.
+  To run without persistence, set persistence.enabled=false.
+
+Configuration:
+  Use .Values.env to set environment variables (see https://github.com/Hybrowse/hytale-server-docker/blob/main/docs/image/configuration.md).
+  HYTALE_BIND defaults to 0.0.0.0:{{ .Values.service.port }} unless you set env.HYTALE_BIND.
+
+Naming:
+  By default resources are named <release>-<chart> (e.g. hytale-hytale-server).
+  To use a shorter name, set either nameOverride or fullnameOverride, for example:
+    --set nameOverride=hytale
+
+ARM64 / auto-download:
+  Auto-download is amd64-only. On mixed-arch clusters you can schedule the pod to amd64 nodes:
+    --set nodeSelector.kubernetes\.io/arch=amd64
+
+Secrets:
+  Server auth tokens: set .Values.secrets.serverAuth (Secret name + keys).
+  CurseForge API key: set .Values.secrets.curseforge (Secret name + key).
+  Downloader credentials: set .Values.secrets.downloaderCredentials (Secret name + key).

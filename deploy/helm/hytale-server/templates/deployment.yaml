@@ -1,0 +1,173 @@
+{{- if eq .Values.workload.kind "Deployment" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hytale-server.fullname" . }}
+  labels:
+    {{- include "hytale-server.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "hytale-server.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hytale-server.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "hytale-server.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.extraInitContainers }}
+      initContainers:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: hytale-server
+          {{- $tag := default .Chart.AppVersion .Values.image.tag }}
+          image: "{{ .Values.image.repository }}:{{ $tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.command }}
+          {{- if gt (len .) 0 }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.args }}
+          {{- if gt (len .) 0 }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- end }}
+          ports:
+            - name: quic
+              containerPort: {{ .Values.service.port }}
+              protocol: UDP
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            {{- if not (hasKey .Values.env "HYTALE_BIND") }}
+            - name: HYTALE_BIND
+              value: "0.0.0.0:{{ .Values.service.port }}"
+            {{- end }}
+            {{- range $name, $value := .Values.env }}
+            - name: {{ $name | quote }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- if and .Values.secrets.serverAuth.name .Values.secrets.serverAuth.sessionTokenKey }}
+            - name: HYTALE_SERVER_SESSION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.serverAuth.name | quote }}
+                  key: {{ .Values.secrets.serverAuth.sessionTokenKey | quote }}
+            {{- end }}
+            {{- if and .Values.secrets.serverAuth.name .Values.secrets.serverAuth.identityTokenKey }}
+            - name: HYTALE_SERVER_IDENTITY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.serverAuth.name | quote }}
+                  key: {{ .Values.secrets.serverAuth.identityTokenKey | quote }}
+            {{- end }}
+            {{- if and .Values.secrets.curseforge.name .Values.secrets.curseforge.apiKeyKey }}
+            - name: HYTALE_CURSEFORGE_API_KEY_SRC
+              value: "{{ .Values.secrets.curseforge.mountPath }}/{{ .Values.secrets.curseforge.fileName }}"
+            {{- end }}
+            {{- if and .Values.secrets.downloaderCredentials.name .Values.secrets.downloaderCredentials.credentialsKey }}
+            - name: HYTALE_DOWNLOADER_CREDENTIALS_SRC
+              value: "{{ .Values.secrets.downloaderCredentials.mountPath }}/{{ .Values.secrets.downloaderCredentials.fileName }}"
+            {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            {{- if .Values.tmp.enabled }}
+            - name: tmp
+              mountPath: /tmp
+            {{- end }}
+            {{- if and .Values.secrets.curseforge.name .Values.secrets.curseforge.apiKeyKey }}
+            - name: curseforge-api-key
+              mountPath: "{{ .Values.secrets.curseforge.mountPath }}/{{ .Values.secrets.curseforge.fileName }}"
+              subPath: {{ .Values.secrets.curseforge.fileName | quote }}
+              readOnly: true
+            {{- end }}
+            {{- if and .Values.secrets.downloaderCredentials.name .Values.secrets.downloaderCredentials.credentialsKey }}
+            - name: downloader-credentials
+              mountPath: "{{ .Values.secrets.downloaderCredentials.mountPath }}/{{ .Values.secrets.downloaderCredentials.fileName }}"
+              subPath: {{ .Values.secrets.downloaderCredentials.fileName | quote }}
+              readOnly: true
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        {{- with .Values.extraContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ default (include "hytale-server.fullname" .) .Values.persistence.existingClaim | quote }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- if .Values.tmp.enabled }}
+        - name: tmp
+          emptyDir:
+            {{- toYaml .Values.tmp.emptyDir | nindent 12 }}
+        {{- end }}
+        {{- if and .Values.secrets.curseforge.name .Values.secrets.curseforge.apiKeyKey }}
+        - name: curseforge-api-key
+          secret:
+            secretName: {{ .Values.secrets.curseforge.name | quote }}
+            items:
+              - key: {{ .Values.secrets.curseforge.apiKeyKey | quote }}
+                path: {{ .Values.secrets.curseforge.fileName | quote }}
+        {{- end }}
+        {{- if and .Values.secrets.downloaderCredentials.name .Values.secrets.downloaderCredentials.credentialsKey }}
+        - name: downloader-credentials
+          secret:
+            secretName: {{ .Values.secrets.downloaderCredentials.name | quote }}
+            items:
+              - key: {{ .Values.secrets.downloaderCredentials.credentialsKey | quote }}
+                path: {{ .Values.secrets.downloaderCredentials.fileName | quote }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+
+{{- end }}
