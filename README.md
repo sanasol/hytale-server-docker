@@ -31,6 +31,8 @@ No server setup needed - just download, launch, and play!
 - **All cosmetics unlocked** - full access to character customization
 - **Cosmetics saved by username** - your skin/cosmetic choices persist between sessions
 
+> **Note**: There is no password authentication - anyone can use any username. If you use a username someone else has used, you'll see their cosmetics. Use a unique username for testing.
+
 #### Build from Source
 
 Use the [Hytale-F2P launcher](https://github.com/sanasol/Hytale-F2P/tree/patched-auth-server) with default configuration.
