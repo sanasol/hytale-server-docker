@@ -1,0 +1,28 @@
+services:
+  hytale:
+    build: .
+    environment:
+      # Custom auth server configuration (domain must be exactly 10 characters)
+      HYTALE_AUTH_DOMAIN: "sanasol.ws"
+      HYTALE_PATCH_SERVER: "true"
+      HYTALE_AUTO_FETCH_TOKENS: "true"
+      HYTALE_AUTH_SERVER: "https://sessions.sanasol.ws"
+      HYTALE_SERVER_UUID: "00000000-0000-0000-0000-000000000001"
+      HYTALE_SERVER_NAME: "DedicatedServer"
+      # Server configuration
+      HYFIXES_DISABLE_CHUNK_UNLOAD: "true"
+      HYTALE_ACCEPT_EARLY_PLUGINS: "true"
+      HYTALE_AUTH_MODE: "authenticated"
+      HYTALE_AUTO_DOWNLOAD: "true"
+      HYTALE_ENABLE_BACKUP: "false"
+      HYTALE_BACKUP_DIR: "/backups"
+      HYTALE_BACKUP_FREQUENCY_MINUTES: "60"
+
+    ports:
+      - "5520:5520/udp"
+    volumes:
+      - ./data:/data
+      - ./backups:/backups
+    tty: true
+    stdin_open: true
+    restart: unless-stopped

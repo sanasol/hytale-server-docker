@@ -2,12 +2,85 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/hybrowse/hytale-server)](https://hub.docker.com/r/hybrowse/hytale-server)
 
 # Hytale Server Docker Image
- 
+
 **🐳 Production-ready Docker image for dedicated Hytale servers.**
 
 Automatic CurseForge mod management, auto-download with smart update detection, Helm chart, CLI, easy configuration, and quick troubleshooting.
 
 Brought to you by [Hybrowse](https://hybrowse.gg) and the developer of [setupmc.com](https://setupmc.com).
+
+---
+
+## Custom Auth Server Support (Experimental)
+
+This fork includes support for custom authentication servers, allowing you to run a complete F2P Hytale setup.
+
+> **Warning**: This is experimental and for educational purposes only.
+
+### Related Projects
+
+| Project | Description |
+|---------|-------------|
+| [hytale-auth-server](https://github.com/sanasol/hytale-auth-server) | Authentication server |
+| [Hytale-F2P](https://github.com/sanasol/Hytale-F2P/tree/patched-auth-server) | Game launcher with domain patching |
+| [hytale-server-docker](https://github.com/sanasol/hytale-server-docker) | Dedicated server Docker image (this repo) |
+
+### Custom Auth Features
+
+- **Automatic domain patching**: Patches `HytaleServer.jar` to use your custom auth domain
+- **Token auto-fetch**: Automatically fetches server tokens from your auth server on startup
+- **Configurable domain**: Set your 10-character domain via environment variable
+
+### Custom Auth Configuration
+
+```yaml
+services:
+  hytale:
+    build: .  # Build from this repo instead of using hybrowse image
+    environment:
+      # Custom auth server configuration
+      HYTALE_AUTH_DOMAIN: "sanasol.ws"     # Your 10-character domain
+      HYTALE_PATCH_SERVER: "true"           # Enable automatic JAR patching
+      HYTALE_AUTO_FETCH_TOKENS: "true"      # Fetch tokens from auth server
+      HYTALE_AUTH_SERVER: "https://sessions.sanasol.ws"
+
+      # Standard configuration
+      HYTALE_AUTO_DOWNLOAD: "true"
+      HYTALE_AUTH_MODE: "authenticated"
+    ports:
+      - "5520:5520/udp"
+    volumes:
+      - ./data:/data
+```
+
+### Complete Setup
+
+1. **Start the auth server** ([hytale-auth-server](https://github.com/sanasol/hytale-auth-server)):
+   ```bash
+   git clone https://github.com/sanasol/hytale-auth-server.git
+   cd hytale-auth-server
+   # Edit compose.yaml with your domain
+   docker compose up -d
+   ```
+
+2. **Start this dedicated server**:
+   ```bash
+   git clone https://github.com/sanasol/hytale-server-docker.git
+   cd hytale-server-docker
+   # Edit compose.yaml with your domain
+   docker compose build
+   docker compose up -d
+   ```
+
+3. **Launch with the F2P launcher** ([Hytale-F2P](https://github.com/sanasol/Hytale-F2P/tree/patched-auth-server)):
+   ```bash
+   git clone -b patched-auth-server https://github.com/sanasol/Hytale-F2P.git
+   cd Hytale-F2P
+   npm install
+   npm start
+   ```
+
+---
 
 ## Image
 

@@ -1,7 +1,7 @@
 FROM eclipse-temurin:25-jre
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends tini ca-certificates curl unzip jq \
+  && apt-get install -y --no-install-recommends tini ca-certificates curl unzip zip perl jq \
   && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -f hytale \
@@ -22,7 +22,9 @@ COPY scripts/curseforge-mods.sh /usr/local/bin/hytale-curseforge-mods
 COPY scripts/prestart-downloads.sh /usr/local/bin/hytale-prestart-downloads
 COPY scripts/hytale-cli.sh /usr/local/bin/hytale-cli
 COPY scripts/healthcheck.sh /usr/local/bin/hytale-healthcheck
-RUN chmod 0755 /usr/local/bin/hytale-entrypoint /usr/local/bin/hytale-cfg-interpolate /usr/local/bin/hytale-auto-download /usr/local/bin/hytale-curseforge-mods /usr/local/bin/hytale-prestart-downloads /usr/local/bin/hytale-cli /usr/local/bin/hytale-healthcheck
+COPY scripts/patch-server.sh /usr/local/bin/hytale-patch-server
+COPY scripts/fetch-server-tokens.sh /usr/local/bin/hytale-fetch-tokens
+RUN chmod 0755 /usr/local/bin/hytale-entrypoint /usr/local/bin/hytale-cfg-interpolate /usr/local/bin/hytale-auto-download /usr/local/bin/hytale-curseforge-mods /usr/local/bin/hytale-prestart-downloads /usr/local/bin/hytale-cli /usr/local/bin/hytale-healthcheck /usr/local/bin/hytale-patch-server /usr/local/bin/hytale-fetch-tokens
 
 USER hytale
 

@@ -226,6 +226,25 @@ export DATA_DIR SERVER_DIR
 
 /usr/local/bin/hytale-prestart-downloads
 
+# Patch server JAR to use custom auth domain (sanasol.ws)
+if is_true "${HYTALE_PATCH_SERVER:-true}"; then
+  log "Patching server for custom auth domain..."
+  /usr/local/bin/hytale-patch-server "${HYTALE_SERVER_JAR}"
+fi
+
+# Fetch server tokens from auth server if not already set and auto-fetch is enabled
+if is_true "${HYTALE_AUTO_FETCH_TOKENS:-true}"; then
+  if [ -z "${HYTALE_SERVER_SESSION_TOKEN:-}" ] || [ -z "${HYTALE_SERVER_IDENTITY_TOKEN:-}" ]; then
+    log "Fetching server tokens from auth server..."
+    /usr/local/bin/hytale-fetch-tokens || true
+    # Source the tokens if fetch succeeded
+    if [ -f /tmp/server_tokens.env ]; then
+      . /tmp/server_tokens.env
+      export HYTALE_SERVER_SESSION_TOKEN HYTALE_SERVER_IDENTITY_TOKEN
+    fi
+  fi
+fi
+
 /usr/local/bin/hytale-cfg-interpolate
 
 log "Starting Hytale dedicated server"
