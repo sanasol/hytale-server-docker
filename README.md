@@ -21,7 +21,16 @@ This fork includes support for custom authentication servers, allowing you to ru
 
 **Works out of the box!** By default, all configurations use `sanasol.ws` - a public test auth server. You can start using this immediately without setting up your own authentication server.
 
-Just use the default configuration and connect with the [Hytale-F2P launcher](https://github.com/sanasol/Hytale-F2P/tree/patched-auth-server).
+#### Quick Test (No Setup Required)
+
+1. **Download the pre-built launcher**: [Hytale-F2P v2.0.4-auth-sanasol.ws](https://github.com/sanasol/Hytale-F2P/releases/tag/v2.0.4-auth-sanasol.ws)
+2. **Connect to the public game server**: `ht.vboro.de:5720`
+
+No server setup needed - just download, launch, and play!
+
+#### Build from Source
+
+Use the [Hytale-F2P launcher](https://github.com/sanasol/Hytale-F2P/tree/patched-auth-server) with default configuration.
 
 > **Note**: For production use or privacy, you can set up your own auth server using [hytale-auth-server](https://github.com/sanasol/hytale-auth-server).
 
