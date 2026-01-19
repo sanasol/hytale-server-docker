@@ -28,6 +28,9 @@ This fork includes support for custom authentication servers, allowing you to ru
 
 No server setup needed - just download, launch, and play!
 
+- **All cosmetics unlocked** - full access to character customization
+- **Cosmetics saved by username** - your skin/cosmetic choices persist between sessions
+
 #### Build from Source
 
 Use the [Hytale-F2P launcher](https://github.com/sanasol/Hytale-F2P/tree/patched-auth-server) with default configuration.
