@@ -17,6 +17,14 @@ This fork includes support for custom authentication servers, allowing you to ru
 
 > **Warning**: This is experimental and for educational purposes only.
 
+### Public Test Server (Default)
+
+**Works out of the box!** By default, all configurations use `sanasol.ws` - a public test auth server. You can start using this immediately without setting up your own authentication server.
+
+Just use the default configuration and connect with the [Hytale-F2P launcher](https://github.com/sanasol/Hytale-F2P/tree/patched-auth-server).
+
+> **Note**: For production use or privacy, you can set up your own auth server using [hytale-auth-server](https://github.com/sanasol/hytale-auth-server).
+
 ### Related Projects
 
 | Project | Description |
@@ -53,7 +61,29 @@ services:
       - ./data:/data
 ```
 
-### Complete Setup
+### Quick Start (Using Public Test Server)
+
+Using the default `sanasol.ws` auth server - no auth server setup needed:
+
+1. **Start this dedicated server**:
+   ```bash
+   git clone https://github.com/sanasol/hytale-server-docker.git
+   cd hytale-server-docker
+   docker compose build
+   docker compose up -d
+   ```
+
+2. **Launch with the F2P launcher** ([Hytale-F2P](https://github.com/sanasol/Hytale-F2P/tree/patched-auth-server)):
+   ```bash
+   git clone -b patched-auth-server https://github.com/sanasol/Hytale-F2P.git
+   cd Hytale-F2P
+   npm install
+   npm start
+   ```
+
+### Complete Setup (Own Auth Server)
+
+For running your own auth server with a custom domain:
 
 1. **Start the auth server** ([hytale-auth-server](https://github.com/sanasol/hytale-auth-server)):
    ```bash
@@ -77,6 +107,7 @@ services:
    git clone -b patched-auth-server https://github.com/sanasol/Hytale-F2P.git
    cd Hytale-F2P
    npm install
+   # Set HYTALE_AUTH_DOMAIN=yourdomain environment variable
    npm start
    ```
 
