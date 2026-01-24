@@ -191,6 +191,29 @@ Monitor and experiment with different values.
 
 See: [`configuration.md`](configuration.md#jvm-heap-tuning)
 
+## Dual auth not working after server update
+
+**Symptom:** F2P clients can't connect after the server JAR was auto-updated, even though dual auth was working before.
+
+**Cause:** The server JAR was replaced by an update, but a stale `.patched_dual_auth` flag file exists from the previous patched version.
+
+**Fix (automatic):** The patcher now checks the actual JAR contents instead of relying solely on the flag file. It looks for injected classes (like `DualAuthContext.class`) to verify if the JAR is actually patched. If the flag file exists but the JAR is unpatched, it will automatically re-patch.
+
+**Fix (manual):** If needed, delete the flag file and restart:
+
+```bash
+rm /data/server/.patched_dual_auth
+docker compose restart hytale
+```
+
+**Verify patching manually:**
+
+```bash
+# Check if JAR contains dual auth classes
+docker exec hytale unzip -l /data/server/HytaleServer.jar | grep DualAuthContext
+# Should show: com/hypixel/hytale/server/core/auth/DualAuthContext.class
+```
+
 ## Related docs
 
 - [`quickstart.md`](quickstart.md)
