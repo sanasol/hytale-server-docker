@@ -83,7 +83,8 @@ HYTALE_WORLD_GEN_PATH="${HYTALE_WORLD_GEN_PATH:-}"
 HYTALE_AUTO_DOWNLOAD="${HYTALE_AUTO_DOWNLOAD:-false}"
 HYTALE_AUTO_UPDATE="${HYTALE_AUTO_UPDATE:-true}"
 
-HYTALE_CONSOLE_PIPE="${HYTALE_CONSOLE_PIPE:-true}"
+# Set to false for interactive console (docker attach), true for FIFO mode (hytale-cli)
+HYTALE_CONSOLE_PIPE="${HYTALE_CONSOLE_PIPE:-false}"
 
 HYTALE_JAVA_TERMINAL_PROPS="${HYTALE_JAVA_TERMINAL_PROPS:-true}"
 
@@ -226,10 +227,21 @@ export DATA_DIR SERVER_DIR
 
 /usr/local/bin/hytale-prestart-downloads
 
-# Patch server JAR to use custom auth domain (sanasol.ws)
-if is_true "${HYTALE_PATCH_SERVER:-true}"; then
-  log "Patching server for custom auth domain..."
-  /usr/local/bin/hytale-patch-server "${HYTALE_SERVER_JAR}"
+# Dual Authentication Mode
+# Patches the server JAR to support BOTH hytale.com (official) AND sanasol.ws (F2P) authentication
+# This enables:
+# - TRUE dual auth: both official and F2P clients can join the same server
+# - /auth login device flow uses OFFICIAL hytale.com (unchanged)
+# - F2P server tokens auto-fetched from sanasol.ws on startup
+# - JWKS loaded from BOTH backends and merged
+# - Token routing based on player's token issuer
+# - Dual server identity tokens for server authentication
+if is_true "${HYTALE_DUAL_AUTH:-true}"; then
+  log "Applying dual authentication patch..."
+  log "  Mode: TRUE DUAL AUTH (official + F2P)"
+  log "  Official: hytale.com (/auth login)"
+  log "  F2P: ${HYTALE_AUTH_DOMAIN:-sanasol.ws} (auto-fetch)"
+  /usr/local/bin/hytale-patch-dual-auth "${HYTALE_SERVER_JAR}" || log "WARNING: Dual auth patching failed"
 fi
 
 # Fetch server tokens from auth server if not already set and auto-fetch is enabled
@@ -500,7 +512,13 @@ if [ -n "${HYTALE_SERVER_IDENTITY_TOKEN:-}" ]; then
   set -- "$@" --identity-token "${HYTALE_SERVER_IDENTITY_TOKEN}"
 fi
 
-if is_true "${HYTALE_CONSOLE_PIPE}"; then
+# Console mode:
+# - HYTALE_CONSOLE_PIPE=true: Use FIFO for programmatic input (docker exec hytale-cli)
+# - HYTALE_CONSOLE_PIPE=false (default): Direct stdin for interactive console (docker attach)
+
+cd "${SERVER_DIR}"
+
+if is_true "${HYTALE_CONSOLE_PIPE:-false}"; then
   CONSOLE_FIFO="${HYTALE_CONSOLE_FIFO:-/tmp/hytale-console.fifo}"
 
   if [ -e "${CONSOLE_FIFO}" ] && [ ! -p "${CONSOLE_FIFO}" ]; then
@@ -514,10 +532,10 @@ if is_true "${HYTALE_CONSOLE_PIPE}"; then
     chmod 0600 "${CONSOLE_FIFO}" 2>/dev/null || true
   fi
 
+  log "Console mode: FIFO (use 'hytale-cli' for commands)"
   exec 3<> "${CONSOLE_FIFO}"
-  cd "${SERVER_DIR}"
   exec "$@" <&3
+else
+  log "Console mode: Interactive (stdin attached)"
+  exec "$@"
 fi
-
-cd "${SERVER_DIR}"
-exec "$@"

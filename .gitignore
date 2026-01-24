@@ -2,14 +2,22 @@ local/
 
 backups/
 data/
+secrets/
 .secrets/
 .hytale-downloader-credentials.json
- 
+
 hytale-downloader/
 hytale-downloader-*.zip
 hytale-downloader-*
- 
+
 .DS_Store
 
 .windsurf/
 .claude/
+
+# Decompiled server sources (for reference only)
+Hytale-Server-Unpacked-main/
+
+# Compiled patcher classes (built during Docker build)
+issuer-patcher/*.class
+issuer-patcher/lib/
