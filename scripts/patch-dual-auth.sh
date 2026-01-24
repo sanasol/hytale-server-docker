@@ -34,7 +34,7 @@ JAR_PATH="${1:-${HYTALE_SERVER_JAR:-/data/server/HytaleServer.jar}}"
 
 echo "=== Hytale Server Dual Authentication Patcher ==="
 echo "Target: $JAR_PATH"
-echo "F2P Domain: ${HYTALE_AUTH_DOMAIN:-sanasol.ws}"
+echo "F2P Domain: ${HYTALE_AUTH_DOMAIN:-auth.sanasol.ws}"
 
 if [ ! -f "$JAR_PATH" ]; then
     echo "ERROR: JAR not found: $JAR_PATH"

@@ -29,12 +29,33 @@ import java.util.zip.*;
 public class DualAuthPatcher {
 
     private static final String F2P_DOMAIN = System.getenv("HYTALE_AUTH_DOMAIN") != null
-        ? System.getenv("HYTALE_AUTH_DOMAIN") : "sanasol.ws";
+        ? System.getenv("HYTALE_AUTH_DOMAIN") : "auth.sanasol.ws";
 
     private static final String OFFICIAL_SESSION_URL = "https://sessions.hytale.com";
     private static final String OFFICIAL_ISSUER = "https://sessions.hytale.com";
-    private static final String F2P_SESSION_URL = "https://sessions." + F2P_DOMAIN;
-    private static final String F2P_ISSUER = "https://sessions." + F2P_DOMAIN;
+
+    // F2P always uses single endpoint without subdomains (all traffic routes to one domain)
+    // Official hytale.com keeps original subdomain behavior (sessions., account-data., etc.)
+    private static final String F2P_SESSION_URL = "https://" + F2P_DOMAIN;
+    private static final String F2P_ISSUER = F2P_SESSION_URL;
+
+    // Base domain for backward compatibility (accepts sessions.sanasol.ws, auth.sanasol.ws, etc.)
+    // Extracts "sanasol.ws" from "auth.sanasol.ws"
+    private static final String F2P_BASE_DOMAIN = extractBaseDomain(F2P_DOMAIN);
+
+    private static String extractBaseDomain(String domain) {
+        // auth.sanasol.ws -> sanasol.ws
+        // sanasol.ws -> sanasol.ws
+        int firstDot = domain.indexOf('.');
+        if (firstDot > 0) {
+            String afterFirstDot = domain.substring(firstDot + 1);
+            // Check if there's another dot (meaning we have a subdomain)
+            if (afterFirstDot.indexOf('.') > 0) {
+                return afterFirstDot;
+            }
+        }
+        return domain;
+    }
 
     // Package for injected classes
     private static final String AUTH_PKG = "com/hypixel/hytale/server/core/auth/";
@@ -53,6 +74,35 @@ public class DualAuthPatcher {
     private static int patchCount = 0;
     private static boolean verbose = true;
     private static Set<String> patchedMethods = new HashSet<>();
+
+    /**
+     * Custom ClassWriter that handles unknown classes gracefully.
+     * When COMPUTE_FRAMES is used, ASM needs to find common superclasses,
+     * but we don't have access to the JAR's classes at patching time.
+     * This implementation returns "java/lang/Object" for any unknown class.
+     */
+    private static class SafeClassWriter extends ClassWriter {
+        public SafeClassWriter(int flags) {
+            super(flags);
+        }
+
+        public SafeClassWriter(ClassReader classReader, int flags) {
+            super(classReader, flags);
+        }
+
+        @Override
+        protected String getCommonSuperClass(String type1, String type2) {
+            // For well-known Java classes, use the standard implementation
+            try {
+                return super.getCommonSuperClass(type1, type2);
+            } catch (RuntimeException e) {
+                // If either type is not found (TypeNotPresentException extends RuntimeException),
+                // return Object as the common superclass.
+                // This is safe because Object is the root of all class hierarchies.
+                return "java/lang/Object";
+            }
+        }
+    }
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
@@ -73,6 +123,7 @@ public class DualAuthPatcher {
         System.out.println("Configuration:");
         System.out.println("  Official: " + OFFICIAL_SESSION_URL + " (issuer: " + OFFICIAL_ISSUER + ")");
         System.out.println("  F2P:      " + F2P_SESSION_URL + " (issuer: " + F2P_ISSUER + ")");
+        System.out.println("  F2P Base: *." + F2P_BASE_DOMAIN + " (backward compatible issuers)");
         System.out.println();
 
         patchJar(inputJar, outputJar);
@@ -223,7 +274,8 @@ public class DualAuthPatcher {
         System.out.println();
         System.out.println("The server now supports BOTH authentication sources:");
         System.out.println("  [OK] JWKS loaded from BOTH " + OFFICIAL_SESSION_URL + " AND " + F2P_SESSION_URL);
-        System.out.println("  [OK] Tokens accepted from both hytale.com and " + F2P_DOMAIN + " issuers");
+        System.out.println("  [OK] Tokens accepted from both hytale.com and *." + F2P_BASE_DOMAIN + " issuers");
+        System.out.println("       (backward compatible: sessions." + F2P_BASE_DOMAIN + ", " + F2P_DOMAIN + ", etc.)");
         System.out.println("  [OK] Authorization requests routed based on token issuer");
     }
 
@@ -231,7 +283,7 @@ public class DualAuthPatcher {
      * Generate DualAuthContext class - Thread-local storage for current issuer
      */
     private static byte[] generateDualAuthContext() {
-        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        ClassWriter cw = new SafeClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
 
         cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL,
             CONTEXT_CLASS, null, "java/lang/Object", null);
@@ -328,7 +380,7 @@ public class DualAuthPatcher {
      * Generate DualAuthHelper class - Issuer validation and URL routing
      */
     private static byte[] generateDualAuthHelper() {
-        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        ClassWriter cw = new SafeClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
 
         cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL,
             HELPER_CLASS, null, "java/lang/Object", null);
@@ -376,6 +428,21 @@ public class DualAuthPatcher {
         mv = cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,
             "isValidIssuer", "(Ljava/lang/String;)Z", null, null);
         mv.visitCode();
+
+        // Debug: Print the issuer being validated and expected domains
+        // System.out.println("[DualAuth] Validating issuer: " + issuer + " (accepts: hytale.com or *." + F2P_BASE_DOMAIN + ")");
+        mv.visitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder");
+        mv.visitInsn(Opcodes.DUP);
+        mv.visitLdcInsn("[DualAuth] Validating issuer: ");
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V", false);
+        mv.visitVarInsn(Opcodes.ALOAD, 0); // issuer parameter
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+        mv.visitLdcInsn(" (accepts: hytale.com or *." + F2P_BASE_DOMAIN + ")");
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
+
         mv.visitVarInsn(Opcodes.ALOAD, 0);
         Label checkNotNull = new Label();
         mv.visitJumpInsn(Opcodes.IFNONNULL, checkNotNull);
@@ -394,9 +461,10 @@ public class DualAuthPatcher {
         mv.visitInsn(Opcodes.IRETURN);
         mv.visitLabel(notOfficial);
         mv.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
-        // Check if contains F2P domain
+        // Check if contains F2P base domain (sanasol.ws) for backward compatibility
+        // This accepts both auth.sanasol.ws (new) and sessions.sanasol.ws (old)
         mv.visitVarInsn(Opcodes.ALOAD, 0);
-        mv.visitLdcInsn(F2P_DOMAIN);
+        mv.visitLdcInsn(F2P_BASE_DOMAIN);
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/String", "contains",
             "(Ljava/lang/CharSequence;)Z", false);
         mv.visitInsn(Opcodes.IRETURN);
@@ -404,35 +472,64 @@ public class DualAuthPatcher {
         mv.visitEnd();
 
         // public static String getSessionUrl()
+        // Returns the session URL based on current context's issuer
+        // For backward compatibility: returns the actual issuer (e.g., sessions.sanasol.ws)
         mv = cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,
             "getSessionUrl", "()Ljava/lang/String;", null, null);
         mv.visitCode();
-        mv.visitMethodInsn(Opcodes.INVOKESTATIC, CONTEXT_CLASS, "isF2P", "()Z", false);
-        Label official = new Label();
-        mv.visitJumpInsn(Opcodes.IFEQ, official);
-        mv.visitLdcInsn(F2P_SESSION_URL);
-        mv.visitInsn(Opcodes.ARETURN);
-        mv.visitLabel(official);
-        mv.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
+        // String issuer = DualAuthContext.getIssuer();
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, CONTEXT_CLASS, "getIssuer", "()Ljava/lang/String;", false);
+        mv.visitVarInsn(Opcodes.ASTORE, 0);
+        // if (issuer == null || isOfficialIssuer(issuer)) return OFFICIAL_SESSION_URL
+        mv.visitVarInsn(Opcodes.ALOAD, 0);
+        Label getSessionUrlNotNull = new Label();
+        mv.visitJumpInsn(Opcodes.IFNONNULL, getSessionUrlNotNull);
         mv.visitLdcInsn(OFFICIAL_SESSION_URL);
         mv.visitInsn(Opcodes.ARETURN);
-        mv.visitMaxs(1, 0);
-        mv.visitEnd();
-
-        // public static String getSessionUrlForIssuer(String issuer)
-        mv = cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,
-            "getSessionUrlForIssuer", "(Ljava/lang/String;)Ljava/lang/String;", null, null);
-        mv.visitCode();
+        mv.visitLabel(getSessionUrlNotNull);
+        mv.visitFrame(Opcodes.F_APPEND, 1, new Object[]{"java/lang/String"}, 0, null);
         mv.visitVarInsn(Opcodes.ALOAD, 0);
         mv.visitMethodInsn(Opcodes.INVOKESTATIC, HELPER_CLASS, "isOfficialIssuer",
             "(Ljava/lang/String;)Z", false);
-        Label f2pUrl = new Label();
-        mv.visitJumpInsn(Opcodes.IFEQ, f2pUrl);
+        Label getSessionUrlF2p = new Label();
+        mv.visitJumpInsn(Opcodes.IFEQ, getSessionUrlF2p);
         mv.visitLdcInsn(OFFICIAL_SESSION_URL);
         mv.visitInsn(Opcodes.ARETURN);
-        mv.visitLabel(f2pUrl);
+        mv.visitLabel(getSessionUrlF2p);
         mv.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
-        mv.visitLdcInsn(F2P_SESSION_URL);
+        // For F2P: return the issuer itself (it's the session URL)
+        mv.visitVarInsn(Opcodes.ALOAD, 0);
+        mv.visitInsn(Opcodes.ARETURN);
+        mv.visitMaxs(1, 1);
+        mv.visitEnd();
+
+        // public static String getSessionUrlForIssuer(String issuer)
+        // For backward compatibility: return the actual issuer URL (e.g., sessions.sanasol.ws)
+        // instead of hardcoded F2P URL, so requests go back to the original auth server
+        mv = cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,
+            "getSessionUrlForIssuer", "(Ljava/lang/String;)Ljava/lang/String;", null, null);
+        mv.visitCode();
+        // if (issuer == null) return OFFICIAL_SESSION_URL
+        mv.visitVarInsn(Opcodes.ALOAD, 0);
+        Label issuerNotNull = new Label();
+        mv.visitJumpInsn(Opcodes.IFNONNULL, issuerNotNull);
+        mv.visitLdcInsn(OFFICIAL_SESSION_URL);
+        mv.visitInsn(Opcodes.ARETURN);
+        mv.visitLabel(issuerNotNull);
+        mv.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
+        // if (isOfficialIssuer(issuer)) return OFFICIAL_SESSION_URL
+        mv.visitVarInsn(Opcodes.ALOAD, 0);
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, HELPER_CLASS, "isOfficialIssuer",
+            "(Ljava/lang/String;)Z", false);
+        Label returnIssuer = new Label();
+        mv.visitJumpInsn(Opcodes.IFEQ, returnIssuer);
+        mv.visitLdcInsn(OFFICIAL_SESSION_URL);
+        mv.visitInsn(Opcodes.ARETURN);
+        mv.visitLabel(returnIssuer);
+        mv.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
+        // For F2P: return the issuer itself (it's the session URL)
+        // This preserves backward compatibility: sessions.sanasol.ws -> sessions.sanasol.ws
+        mv.visitVarInsn(Opcodes.ALOAD, 0);
         mv.visitInsn(Opcodes.ARETURN);
         mv.visitMaxs(1, 1);
         mv.visitEnd();
@@ -445,8 +542,9 @@ public class DualAuthPatcher {
         Label keepOriginal = new Label();
         mv.visitJumpInsn(Opcodes.IFEQ, keepOriginal);
         mv.visitVarInsn(Opcodes.ALOAD, 0);
+        // F2P uses unified endpoint - replace sessions.hytale.com with just the F2P domain
         mv.visitLdcInsn("sessions.hytale.com");
-        mv.visitLdcInsn("sessions." + F2P_DOMAIN);
+        mv.visitLdcInsn(F2P_DOMAIN);
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/String", "replace",
             "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;", false);
         mv.visitInsn(Opcodes.ARETURN);
@@ -766,36 +864,45 @@ public class DualAuthPatcher {
 
         // if (issuer == null) return; // Can't determine, keep as-is
         mv.visitVarInsn(Opcodes.ALOAD, 2);
-        Label issuerNotNull = new Label();
-        mv.visitJumpInsn(Opcodes.IFNONNULL, issuerNotNull);
+        Label replaceIssuerNotNull = new Label();
+        mv.visitJumpInsn(Opcodes.IFNONNULL, replaceIssuerNotNull);
         mv.visitInsn(Opcodes.RETURN);
-        mv.visitLabel(issuerNotNull);
+        mv.visitLabel(replaceIssuerNotNull);
         mv.visitFrame(Opcodes.F_APPEND, 2, new Object[]{"java/lang/String", "java/lang/String"}, 0, null);
 
-        // if (!issuer.contains("sanasol.ws")) return; // Not F2P, keep hytale.com identity
+        // if (!issuer.contains(F2P_BASE_DOMAIN)) return; // Not F2P, keep hytale.com identity
+        // Use F2P_BASE_DOMAIN (sanasol.ws) for backward compatibility with sessions.sanasol.ws
         mv.visitVarInsn(Opcodes.ALOAD, 2);
-        mv.visitLdcInsn(F2P_DOMAIN);
+        mv.visitLdcInsn(F2P_BASE_DOMAIN);
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/String", "contains",
             "(Ljava/lang/CharSequence;)Z", false);
         Label isF2P = new Label();
         mv.visitJumpInsn(Opcodes.IFNE, isF2P);
         // Log: Not F2P, keeping original
         mv.visitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
-        mv.visitLdcInsn("[DualAuth] Not F2P issuer, keeping original serverIdentityToken");
+        mv.visitLdcInsn("[DualAuth] Not F2P issuer (no " + F2P_BASE_DOMAIN + "), keeping original serverIdentityToken");
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
         mv.visitInsn(Opcodes.RETURN);
 
         mv.visitLabel(isF2P);
         mv.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
 
-        // Log: F2P detected, fetching F2P identity
+        // Log: F2P detected, fetching F2P identity from the authGrant's issuer
         mv.visitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
-        mv.visitLdcInsn("[DualAuth] F2P issuer detected, fetching F2P server identity...");
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder");
+        mv.visitInsn(Opcodes.DUP);
+        mv.visitLdcInsn("[DualAuth] F2P issuer detected, fetching server identity from: ");
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V", false);
+        mv.visitVarInsn(Opcodes.ALOAD, 2); // issuer
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
 
-        // String f2pIdentity = DualServerIdentity.getF2PIdentityToken();
-        mv.visitMethodInsn(Opcodes.INVOKESTATIC, SERVER_IDENTITY_CLASS, "getF2PIdentityToken",
-            "()Ljava/lang/String;", false);
+        // String f2pIdentity = DualServerIdentity.getIdentityTokenForUrl(issuer);
+        // Pass the issuer URL so we fetch from the correct backend (backward compat)
+        mv.visitVarInsn(Opcodes.ALOAD, 2); // issuer
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, SERVER_IDENTITY_CLASS, "getIdentityTokenForUrl",
+            "(Ljava/lang/String;)Ljava/lang/String;", false);
         mv.visitVarInsn(Opcodes.ASTORE, 3); // f2pIdentity
 
         // Log what we got
@@ -879,7 +986,7 @@ public class DualAuthPatcher {
      * hytale.com and sanasol.ws, merges them, and returns the combined set.
      */
     private static byte[] generateDualJwksFetcher() {
-        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        ClassWriter cw = new SafeClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
 
         cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL,
             JWKS_FETCHER_CLASS, null, "java/lang/Object", null);
@@ -904,6 +1011,18 @@ public class DualAuthPatcher {
         mv = cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,
             "fetchJwksJson", "(Ljava/lang/String;)Ljava/lang/String;", null, null);
         mv.visitCode();
+
+        // Debug: Print the URL being fetched
+        // System.out.println("[DualAuth] Fetching JWKS from: " + url);
+        mv.visitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder");
+        mv.visitInsn(Opcodes.DUP);
+        mv.visitLdcInsn("[DualAuth] Fetching JWKS from: ");
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V", false);
+        mv.visitVarInsn(Opcodes.ALOAD, 0); // url parameter
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
 
         // HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
         // Note: HttpClient.newBuilder() is a static method on an abstract class, so itf=false
@@ -984,9 +1103,31 @@ public class DualAuthPatcher {
             "fetchMergedJwksJson", "()Ljava/lang/String;", null, null);
         mv.visitCode();
 
-        // Print log message
+        // Print detailed log message with configured URLs
         mv.visitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
         mv.visitLdcInsn("[DualAuth] Fetching JWKS from both backends...");
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
+
+        // Print Official JWKS URL
+        mv.visitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder");
+        mv.visitInsn(Opcodes.DUP);
+        mv.visitLdcInsn("[DualAuth] Official JWKS URL: ");
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V", false);
+        mv.visitFieldInsn(Opcodes.GETSTATIC, JWKS_FETCHER_CLASS, "OFFICIAL_JWKS_URL", "Ljava/lang/String;");
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
+
+        // Print F2P JWKS URL
+        mv.visitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder");
+        mv.visitInsn(Opcodes.DUP);
+        mv.visitLdcInsn("[DualAuth] F2P JWKS URL: ");
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V", false);
+        mv.visitFieldInsn(Opcodes.GETSTATIC, JWKS_FETCHER_CLASS, "F2P_JWKS_URL", "Ljava/lang/String;");
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
         mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
 
         // String officialJson = fetchJwksJson(OFFICIAL_JWKS_URL);
@@ -1276,7 +1417,7 @@ public class DualAuthPatcher {
      * It fetches the server identity from the F2P auth server (sanasol.ws).
      */
     private static byte[] generateDualServerIdentity() {
-        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        ClassWriter cw = new SafeClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
 
         cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL,
             SERVER_IDENTITY_CLASS, null, "java/lang/Object", null);
@@ -1336,8 +1477,41 @@ public class DualAuthPatcher {
         mv.visitMaxs(4, 0);
         mv.visitEnd();
 
+        // public static String getIdentityTokenForUrl(String baseUrl)
+        // Fetches identity token from a specific URL (for backward compatibility)
+        // This does NOT use the global cache - it always fetches fresh from the given URL
+        mv = cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC,
+            "getIdentityTokenForUrl", "(Ljava/lang/String;)Ljava/lang/String;", null, null);
+        mv.visitCode();
+
+        // if (baseUrl == null) baseUrl = F2P_SESSION_URL;
+        mv.visitVarInsn(Opcodes.ALOAD, 0);
+        Label urlNotNull = new Label();
+        mv.visitJumpInsn(Opcodes.IFNONNULL, urlNotNull);
+        mv.visitLdcInsn(F2P_SESSION_URL);
+        mv.visitVarInsn(Opcodes.ASTORE, 0);
+        mv.visitLabel(urlNotNull);
+        mv.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
+
+        // return fetchIdentityFromUrl(baseUrl);
+        mv.visitVarInsn(Opcodes.ALOAD, 0);
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, SERVER_IDENTITY_CLASS, "fetchIdentityFromUrl",
+            "(Ljava/lang/String;)Ljava/lang/String;", false);
+        mv.visitInsn(Opcodes.ARETURN);
+
+        mv.visitMaxs(1, 1);
+        mv.visitEnd();
+
+        // private static String fetchIdentityFromUrl(String baseUrl)
+        // Fetches server identity from specified URL
+        mv = cw.visitMethod(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC,
+            "fetchIdentityFromUrl", "(Ljava/lang/String;)Ljava/lang/String;", null, null);
+        mv.visitCode();
+        generateFetchIdentityFromUrlBody(mv);
+        mv.visitEnd();
+
         // private static void fetchF2PServerIdentity()
-        // Fetches server identity from F2P auth server
+        // Fetches server identity from F2P auth server (legacy, uses hardcoded URL)
         mv = cw.visitMethod(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC,
             "fetchF2PServerIdentity", "()V", null, null);
         mv.visitCode();
@@ -1518,6 +1692,220 @@ public class DualAuthPatcher {
     }
 
     /**
+     * Generate the body of fetchIdentityFromUrl(String baseUrl) method.
+     * This fetches a server identity token from the given URL.
+     */
+    private static void generateFetchIdentityFromUrlBody(MethodVisitor mv) {
+        // baseUrl is in local var 0
+
+        // Log start
+        mv.visitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder");
+        mv.visitInsn(Opcodes.DUP);
+        mv.visitLdcInsn("[DualAuth] Fetching identity from: ");
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V", false);
+        mv.visitVarInsn(Opcodes.ALOAD, 0); // baseUrl
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
+
+        // try {
+        Label tryStart = new Label();
+        Label tryEnd = new Label();
+        Label catchHandler = new Label();
+        mv.visitTryCatchBlock(tryStart, tryEnd, catchHandler, "java/lang/Exception");
+        mv.visitLabel(tryStart);
+
+        // HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/net/http/HttpClient", "newBuilder",
+            "()Ljava/net/http/HttpClient$Builder;", false);
+        mv.visitLdcInsn(5L);
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/time/Duration", "ofSeconds",
+            "(J)Ljava/time/Duration;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/net/http/HttpClient$Builder", "connectTimeout",
+            "(Ljava/time/Duration;)Ljava/net/http/HttpClient$Builder;", true);
+        mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/net/http/HttpClient$Builder", "build",
+            "()Ljava/net/http/HttpClient;", true);
+        mv.visitVarInsn(Opcodes.ASTORE, 1); // client
+
+        // String serverUuid = UUID.randomUUID().toString();
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/util/UUID", "randomUUID", "()Ljava/util/UUID;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/util/UUID", "toString", "()Ljava/lang/String;", false);
+        mv.visitVarInsn(Opcodes.ASTORE, 2); // serverUuid
+
+        // String jsonBody = "{\"uuid\":\"" + serverUuid + "\"}";
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder");
+        mv.visitInsn(Opcodes.DUP);
+        mv.visitLdcInsn("{\"uuid\":\"");
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V", false);
+        mv.visitVarInsn(Opcodes.ALOAD, 2);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
+            "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+        mv.visitLdcInsn("\"}");
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
+            "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+        mv.visitVarInsn(Opcodes.ASTORE, 3); // jsonBody
+
+        // String url = baseUrl + "/game-session/new";
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder");
+        mv.visitInsn(Opcodes.DUP);
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false);
+        mv.visitVarInsn(Opcodes.ALOAD, 0); // baseUrl
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
+            "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+        mv.visitLdcInsn("/game-session/new");
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append",
+            "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+        mv.visitVarInsn(Opcodes.ASTORE, 4); // url
+
+        // HttpRequest request = HttpRequest.newBuilder()
+        //     .uri(URI.create(url))
+        //     .header("Content-Type", "application/json")
+        //     .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+        //     .build();
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/net/http/HttpRequest", "newBuilder",
+            "()Ljava/net/http/HttpRequest$Builder;", false);
+        mv.visitVarInsn(Opcodes.ALOAD, 4); // url
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/net/URI", "create",
+            "(Ljava/lang/String;)Ljava/net/URI;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/net/http/HttpRequest$Builder", "uri",
+            "(Ljava/net/URI;)Ljava/net/http/HttpRequest$Builder;", true);
+        mv.visitLdcInsn("Content-Type");
+        mv.visitLdcInsn("application/json");
+        mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/net/http/HttpRequest$Builder", "header",
+            "(Ljava/lang/String;Ljava/lang/String;)Ljava/net/http/HttpRequest$Builder;", true);
+        mv.visitVarInsn(Opcodes.ALOAD, 3); // jsonBody
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/net/http/HttpRequest$BodyPublishers", "ofString",
+            "(Ljava/lang/String;)Ljava/net/http/HttpRequest$BodyPublisher;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/net/http/HttpRequest$Builder", "POST",
+            "(Ljava/net/http/HttpRequest$BodyPublisher;)Ljava/net/http/HttpRequest$Builder;", true);
+        mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/net/http/HttpRequest$Builder", "build",
+            "()Ljava/net/http/HttpRequest;", true);
+        mv.visitVarInsn(Opcodes.ASTORE, 5); // request
+
+        // HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        mv.visitVarInsn(Opcodes.ALOAD, 1); // client
+        mv.visitVarInsn(Opcodes.ALOAD, 5); // request
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/net/http/HttpResponse$BodyHandlers", "ofString",
+            "()Ljava/net/http/HttpResponse$BodyHandler;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/net/http/HttpClient", "send",
+            "(Ljava/net/http/HttpRequest;Ljava/net/http/HttpResponse$BodyHandler;)Ljava/net/http/HttpResponse;", false);
+        mv.visitVarInsn(Opcodes.ASTORE, 6); // response
+
+        // if (response.statusCode() != 200) return null;
+        mv.visitVarInsn(Opcodes.ALOAD, 6);
+        mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/net/http/HttpResponse", "statusCode", "()I", true);
+        mv.visitIntInsn(Opcodes.SIPUSH, 200);
+        Label statusOk = new Label();
+        mv.visitJumpInsn(Opcodes.IF_ICMPEQ, statusOk);
+        mv.visitInsn(Opcodes.ACONST_NULL);
+        mv.visitInsn(Opcodes.ARETURN);
+
+        mv.visitLabel(statusOk);
+        mv.visitFrame(Opcodes.F_FULL, 7,
+            new Object[]{"java/lang/String", "java/net/http/HttpClient", "java/lang/String",
+                "java/lang/String", "java/lang/String", "java/net/http/HttpRequest", "java/net/http/HttpResponse"},
+            0, null);
+
+        // String body = (String) response.body();
+        mv.visitVarInsn(Opcodes.ALOAD, 6);
+        mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/net/http/HttpResponse", "body", "()Ljava/lang/Object;", true);
+        mv.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/String");
+        mv.visitVarInsn(Opcodes.ASTORE, 7); // body
+
+        // Extract identityToken from JSON response
+        // int idx = body.indexOf("\"identityToken\":\"");
+        mv.visitVarInsn(Opcodes.ALOAD, 7);
+        mv.visitLdcInsn("\"identityToken\":\"");
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/String", "indexOf", "(Ljava/lang/String;)I", false);
+        mv.visitVarInsn(Opcodes.ISTORE, 8); // idx
+
+        // if (idx < 0) return null;
+        mv.visitVarInsn(Opcodes.ILOAD, 8);
+        Label idxOk = new Label();
+        mv.visitJumpInsn(Opcodes.IFGE, idxOk);
+        mv.visitInsn(Opcodes.ACONST_NULL);
+        mv.visitInsn(Opcodes.ARETURN);
+
+        mv.visitLabel(idxOk);
+        mv.visitFrame(Opcodes.F_FULL, 9,
+            new Object[]{"java/lang/String", "java/net/http/HttpClient", "java/lang/String",
+                "java/lang/String", "java/lang/String", "java/net/http/HttpRequest",
+                "java/net/http/HttpResponse", "java/lang/String", Opcodes.INTEGER},
+            0, null);
+
+        // int start = idx + 17; // length of "\"identityToken\":\""
+        mv.visitVarInsn(Opcodes.ILOAD, 8);
+        mv.visitIntInsn(Opcodes.BIPUSH, 17);
+        mv.visitInsn(Opcodes.IADD);
+        mv.visitVarInsn(Opcodes.ISTORE, 9); // start
+
+        // int end = body.indexOf("\"", start);
+        mv.visitVarInsn(Opcodes.ALOAD, 7);
+        mv.visitIntInsn(Opcodes.BIPUSH, '"');
+        mv.visitVarInsn(Opcodes.ILOAD, 9);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/String", "indexOf", "(II)I", false);
+        mv.visitVarInsn(Opcodes.ISTORE, 10); // end
+
+        // if (end < 0) return null;
+        mv.visitVarInsn(Opcodes.ILOAD, 10);
+        Label endOk = new Label();
+        mv.visitJumpInsn(Opcodes.IFGE, endOk);
+        mv.visitInsn(Opcodes.ACONST_NULL);
+        mv.visitInsn(Opcodes.ARETURN);
+
+        mv.visitLabel(endOk);
+        mv.visitFrame(Opcodes.F_FULL, 11,
+            new Object[]{"java/lang/String", "java/net/http/HttpClient", "java/lang/String",
+                "java/lang/String", "java/lang/String", "java/net/http/HttpRequest",
+                "java/net/http/HttpResponse", "java/lang/String", Opcodes.INTEGER,
+                Opcodes.INTEGER, Opcodes.INTEGER},
+            0, null);
+
+        // String identityToken = body.substring(start, end);
+        mv.visitVarInsn(Opcodes.ALOAD, 7);
+        mv.visitVarInsn(Opcodes.ILOAD, 9);
+        mv.visitVarInsn(Opcodes.ILOAD, 10);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/String", "substring", "(II)Ljava/lang/String;", false);
+        mv.visitVarInsn(Opcodes.ASTORE, 11); // identityToken
+
+        // Log success
+        mv.visitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
+        mv.visitLdcInsn("[DualAuth] Successfully obtained identity from URL");
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
+
+        mv.visitLabel(tryEnd);
+        // return identityToken;
+        mv.visitVarInsn(Opcodes.ALOAD, 11);
+        mv.visitInsn(Opcodes.ARETURN);
+
+        // } catch (Exception e) {
+        mv.visitLabel(catchHandler);
+        mv.visitFrame(Opcodes.F_FULL, 1, new Object[]{"java/lang/String"}, 1, new Object[]{"java/lang/Exception"});
+        mv.visitVarInsn(Opcodes.ASTORE, 1); // e
+
+        // Log error
+        mv.visitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/StringBuilder");
+        mv.visitInsn(Opcodes.DUP);
+        mv.visitLdcInsn("[DualAuth] Error fetching identity: ");
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V", false);
+        mv.visitVarInsn(Opcodes.ALOAD, 1);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Exception", "getMessage", "()Ljava/lang/String;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false);
+
+        // return null;
+        mv.visitInsn(Opcodes.ACONST_NULL);
+        mv.visitInsn(Opcodes.ARETURN);
+
+        mv.visitMaxs(4, 12);
+    }
+
+    /**
      * Generate DualServerTokenManager class - Stores both official and F2P server tokens
      *
      * This class manages dual token sets:
@@ -1528,7 +1916,7 @@ public class DualAuthPatcher {
      * token issuer (extracted from their identity token).
      */
     private static byte[] generateDualServerTokenManager() {
-        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        ClassWriter cw = new SafeClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
 
         cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL,
             TOKEN_MANAGER_CLASS, null, "java/lang/Object", null);
@@ -2026,7 +2414,7 @@ public class DualAuthPatcher {
 
             if (modified) {
                 // Use COMPUTE_FRAMES to properly compute stack map frames for JVM verification
-                ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_FRAMES);
+                ClassWriter writer = new SafeClassWriter(reader, ClassWriter.COMPUTE_FRAMES);
                 classNode.accept(writer);
                 return writer.toByteArray();
             }
@@ -2415,7 +2803,7 @@ public class DualAuthPatcher {
 
             if (modified) {
                 // Use COMPUTE_FRAMES to properly compute stack map frames for JVM verification
-                ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_FRAMES);
+                ClassWriter writer = new SafeClassWriter(reader, ClassWriter.COMPUTE_FRAMES);
                 classNode.accept(writer);
                 return writer.toByteArray();
             }
@@ -2460,7 +2848,7 @@ public class DualAuthPatcher {
             }
 
             if (modified) {
-                ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_FRAMES);
+                ClassWriter writer = new SafeClassWriter(reader, ClassWriter.COMPUTE_FRAMES);
                 classNode.accept(writer);
                 return writer.toByteArray();
             }
@@ -2512,7 +2900,7 @@ public class DualAuthPatcher {
             }
 
             if (modified) {
-                ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_FRAMES);
+                ClassWriter writer = new SafeClassWriter(reader, ClassWriter.COMPUTE_FRAMES);
                 classNode.accept(writer);
                 return writer.toByteArray();
             }
@@ -2952,7 +3340,7 @@ public class DualAuthPatcher {
 
             if (modified) {
                 // Use COMPUTE_FRAMES to properly compute stack map frames for JVM verification
-                ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_FRAMES);
+                ClassWriter writer = new SafeClassWriter(reader, ClassWriter.COMPUTE_FRAMES);
                 classNode.accept(writer);
                 return writer.toByteArray();
             }

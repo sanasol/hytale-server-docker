@@ -8,8 +8,11 @@ log() {
   printf '%s\n' "$*" >&2
 }
 
-HYTALE_AUTH_DOMAIN="${HYTALE_AUTH_DOMAIN:-sanasol.ws}"
-AUTH_SERVER_URL="${HYTALE_AUTH_SERVER_URL:-https://sessions.${HYTALE_AUTH_DOMAIN}}"
+HYTALE_AUTH_DOMAIN="${HYTALE_AUTH_DOMAIN:-auth.sanasol.ws}"
+
+# F2P always uses single endpoint without subdomains
+# All traffic routes to https://{domain} (no sessions., account-data., etc.)
+AUTH_SERVER_URL="${HYTALE_AUTH_SERVER_URL:-https://${HYTALE_AUTH_DOMAIN}}"
 
 # Generate a server ID based on hostname + data dir
 if [ -n "${HYTALE_SERVER_ID:-}" ]; then

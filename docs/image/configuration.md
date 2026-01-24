@@ -271,6 +271,12 @@ In JSON:
 | `JVM_EXTRA_ARGS` | *(empty)* | Extra JVM args appended to the `java` command. |
 | `ENABLE_AOT` | `auto` | `auto\|true\|false\|generate` (controls `-XX:AOTCache=...`). |
 | `EXTRA_SERVER_ARGS` | *(empty)* | Extra server args appended at the end. |
+| `HYTALE_DUAL_AUTH` | `true` | If `true`, enables dual authentication (official hytale.com + F2P). Patches JAR on startup. |
+| `HYTALE_AUTH_DOMAIN` | `auth.sanasol.ws` | F2P authentication domain (4-16 chars). All F2P traffic routes to single endpoint `https://{domain}`. |
+| `HYTALE_AUTO_FETCH_TOKENS` | `true` | If `true` and tokens not set, fetches server tokens from F2P auth server on startup. |
+| `HYTALE_AUTH_SERVER_URL` | *(auto)* | Override the F2P auth server URL. Defaults to `https://{HYTALE_AUTH_DOMAIN}`. |
+| `HYTALE_SERVER_ID` | *(auto)* | Server UUID for token requests. Auto-generated and persisted in `/data/.server-id` if not set. |
+| `HYTALE_SERVER_NAME` | `Hytale Server` | Server name for token requests. |
 | `HYTALE_ALLOW_OP` | `true` | If `true`, enables the `/op` command. |
 | `HYTALE_BARE` | `false` | If `true`, passes `--bare`. |
 | `HYTALE_BOOT_COMMAND` | *(empty)* | Passed as `--boot-command`. |

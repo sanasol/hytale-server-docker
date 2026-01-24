@@ -51,7 +51,7 @@ Use the [Hytale F2P Launcher](https://github.com/amiayweb/Hytale-F2P) with defau
 
 - **Automatic domain patching**: Patches `HytaleServer.jar` to use your custom auth domain
 - **Token auto-fetch**: Automatically fetches server tokens from your auth server on startup
-- **Configurable domain**: Set your 10-character domain via environment variable
+- **Configurable domain**: Set your 4-16 character domain via environment variable
 
 ### Custom Auth Configuration
 
@@ -60,12 +60,8 @@ services:
   hytale:
     build: .  # Build from this repo instead of using hybrowse image
     environment:
-      # Custom auth server configuration
-      HYTALE_AUTH_DOMAIN: "sanasol.ws"     # Your 10-character domain
-      HYTALE_PATCH_SERVER: "true"           # Enable automatic JAR patching
-      HYTALE_AUTO_FETCH_TOKENS: "true"      # Fetch tokens from auth server
-      HYTALE_AUTH_SERVER: "https://sessions.sanasol.ws"
-
+      # F2P auth (all URLs derived from domain automatically)
+      HYTALE_AUTH_DOMAIN: "auth.sanasol.ws"
       # Standard configuration
       HYTALE_AUTO_DOWNLOAD: "true"
       HYTALE_AUTH_MODE: "authenticated"
@@ -74,6 +70,8 @@ services:
     volumes:
       - ./data:/data
 ```
+
+> **Note**: `HYTALE_AUTH_DOMAIN` is all you need. Dual auth patching and token auto-fetch are enabled by default.
 
 ### Quick Start (Using Public Test Server)
 

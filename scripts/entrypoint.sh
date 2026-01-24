@@ -240,7 +240,7 @@ if is_true "${HYTALE_DUAL_AUTH:-true}"; then
   log "Applying dual authentication patch..."
   log "  Mode: TRUE DUAL AUTH (official + F2P)"
   log "  Official: hytale.com (/auth login)"
-  log "  F2P: ${HYTALE_AUTH_DOMAIN:-sanasol.ws} (auto-fetch)"
+  log "  F2P: ${HYTALE_AUTH_DOMAIN:-auth.sanasol.ws} (auto-fetch)"
   /usr/local/bin/hytale-patch-dual-auth "${HYTALE_SERVER_JAR}" || log "WARNING: Dual auth patching failed"
 fi
 
