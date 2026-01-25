@@ -12,8 +12,8 @@ RUN curl -sL "https://repo1.maven.org/maven2/org/ow2/asm/asm/9.6/asm-9.6.jar" -o
   && curl -sL "https://repo1.maven.org/maven2/org/ow2/asm/asm-tree/9.6/asm-tree-9.6.jar" -o lib/asm-tree-9.6.jar \
   && curl -sL "https://repo1.maven.org/maven2/org/ow2/asm/asm-util/9.6/asm-util-9.6.jar" -o lib/asm-util-9.6.jar
 
-# Copy and compile unified dual auth patcher
-COPY issuer-patcher/DualAuthPatcher.java .
+# Download DualAuthPatcher from hytale-auth-server (authoritative source)
+RUN curl -sL "https://raw.githubusercontent.com/sanasol/hytale-auth-server/master/patcher/DualAuthPatcher.java" -o DualAuthPatcher.java
 RUN javac -cp "lib/asm-9.6.jar:lib/asm-tree-9.6.jar:lib/asm-util-9.6.jar" -d . DualAuthPatcher.java
 
 # Runtime stage
