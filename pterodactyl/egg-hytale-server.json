@@ -1,0 +1,152 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY - https://github.com/sanasol/hytale-server-docker",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-01-28T00:00:00+00:00",
+    "name": "Hytale Server",
+    "author": "sanasol@sanasol.ws",
+    "description": "Hytale game server with automatic download. No Hytale account required. Supports both F2P and official licensed clients. For official clients: admin runs /auth logout, /auth persistence Encrypted, /auth login device in server console.",
+    "features": null,
+    "docker_images": {
+        "Java 21": "ghcr.io/pterodactyl/yolks:java_21"
+    },
+    "file_denylist": [],
+    "startup": "./start.sh",
+    "config": {
+        "files": "{}",
+        "startup": "{\r\n    \"done\": \"Server fully started\"\r\n}",
+        "logs": "{}",
+        "stop": "stop"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# Hytale F2P Server Installation Script\n# Downloads pre-patched server from F2P host - no official auth required\n\necho \"=== Hytale F2P Server Installation ===\"\necho \"Downloads server from F2P host (no official auth required)\"\necho \"\"\n\n# Install required packages\necho \"Installing required packages...\"\napt-get update\napt-get install -y unzip curl default-jdk\n\n# Configuration\nAUTH_DOMAIN=\"${AUTH_DOMAIN:-auth.sanasol.ws}\"\nF2P_DOWNLOAD_BASE=\"${F2P_DOWNLOAD_BASE:-https://download.sanasol.ws/download}\"\nASM_VERSION=\"9.6\"\nPATCHER_URL=\"https://raw.githubusercontent.com/sanasol/hytale-auth-server/master/patcher/DualAuthPatcher.java\"\nINJECTED_CLASS=\"com/hypixel/hytale/server/core/auth/DualAuthContext.class\"\n\ncd /mnt/server\n\n# ========================================\n# Step 0: Create start.sh early\n# ========================================\necho \"\"\necho \"=== Step 0: Creating start script ===\"\n\ncat > start.sh << 'STARTSCRIPT'\n#!/bin/bash\n# Hytale F2P Server Start Script\nset -e\n\necho \"==========================================\"\necho \"  Hytale F2P Server\"\necho \"==========================================\"\necho \"\"\necho \"DUAL AUTHENTICATION SUPPORTED:\"\necho \"  - F2P clients: Connect directly (no setup needed)\"\necho \"  - Official clients: Admin runs in SERVER CONSOLE:\"\necho \"      /auth logout\"\necho \"      /auth persistence Encrypted\"\necho \"      /auth login device\"\necho \"    Then complete Hytale auth (game license required)\"\necho \"\"\n\n# Configuration\nAUTH_DOMAIN=\"${AUTH_DOMAIN:-auth.sanasol.ws}\"\n# Use Pterodactyl's SERVER_PORT if available, otherwise fall back to HYTALE_PORT\nHYTALE_PORT=\"${SERVER_PORT:-${HYTALE_PORT:-5520}}\"\nMEMORY_OVERHEAD=\"${MEMORY_OVERHEAD:-256}\"\nAUTH_MODE=\"${AUTH_MODE:-authenticated}\"\nHYTALE_SERVER_NAME=\"${HYTALE_SERVER_NAME:-Hytale F2P Server}\"\nJVM_ARGS=\"${JVM_ARGS:-}\"\n\n# Calculate heap size from SERVER_MEMORY (Pterodactyl built-in)\nSERVER_MEM=${SERVER_MEMORY:-0}\nif [ \"$SERVER_MEM\" -le 0 ] 2>/dev/null || [ -z \"$SERVER_MEM\" ]; then\n    # Detect available memory from system\n    if [ -f /sys/fs/cgroup/memory.max ]; then\n        CGROUP_MEM=$(cat /sys/fs/cgroup/memory.max 2>/dev/null)\n        if [ \"$CGROUP_MEM\" != \"max\" ] && [ -n \"$CGROUP_MEM\" ]; then\n            SERVER_MEM=$((CGROUP_MEM / 1024 / 1024))\n        fi\n    elif [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then\n        CGROUP_MEM=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null)\n        if [ \"$CGROUP_MEM\" -lt 9223372036854771712 ] 2>/dev/null && [ -n \"$CGROUP_MEM\" ]; then\n            SERVER_MEM=$((CGROUP_MEM / 1024 / 1024))\n        fi\n    fi\n    if [ \"$SERVER_MEM\" -le 0 ] 2>/dev/null; then\n        SERVER_MEM=$(free -m 2>/dev/null | awk '/^Mem:/{print $2}')\n        SERVER_MEM=$((SERVER_MEM * 80 / 100))\n    fi\n    if [ \"$SERVER_MEM\" -le 0 ] 2>/dev/null || [ -z \"$SERVER_MEM\" ]; then\n        SERVER_MEM=4096\n    fi\n    echo \"Note: No memory limit set, detected ${SERVER_MEM}MB available\"\nfi\nHEAP_SIZE=$((SERVER_MEM - MEMORY_OVERHEAD))\nif [ $HEAP_SIZE -lt 1024 ]; then\n    HEAP_SIZE=1024\nfi\n\necho \"Auth Domain: $AUTH_DOMAIN\"\necho \"Server Port: $HYTALE_PORT (UDP)\"\nif [ -n \"$SERVER_PORT\" ]; then\n    echo \"  (from Pterodactyl allocation)\"\nelse\n    echo \"  (from HYTALE_PORT variable or default)\"\nfi\necho \"Auth Mode: $AUTH_MODE\"\necho \"Memory: ${HEAP_SIZE}M\"\necho \"\"\n\n# Check required files\nif [ ! -f \"HytaleServer.jar\" ]; then\n    echo \"ERROR: HytaleServer.jar not found!\"\n    echo \"Run the installer again to download the server.\"\n    exit 1\nfi\n\nif [ ! -f \"Assets.zip\" ]; then\n    echo \"ERROR: Assets.zip not found!\"\n    echo \"Run the installer again to download the server files.\"\n    exit 1\nfi\n\n# ========================================\n# Fetch Server Tokens from Auth Server\n# ========================================\necho \"Fetching server tokens from F2P auth server...\"\n\n# Generate or load persistent server ID\nif [ -f \".server-id\" ]; then\n    SERVER_ID=$(cat .server-id)\nelse\n    SERVER_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || echo \"server-$(hostname)-$(date +%s)\")\n    echo \"$SERVER_ID\" > .server-id\nfi\n\necho \"  Server ID: $SERVER_ID\"\necho \"  Server Name: $HYTALE_SERVER_NAME\"\n\n# F2P uses single endpoint without subdomains\nAUTH_SERVER_URL=\"https://${AUTH_DOMAIN}\"\n\n# Call the auto-auth endpoint\nRESPONSE=$(curl -s -X POST \"${AUTH_SERVER_URL}/server/auto-auth\" \\\n  -H \"Content-Type: application/json\" \\\n  -d \"{\\\"server_id\\\": \\\"${SERVER_ID}\\\", \\\"server_name\\\": \\\"${HYTALE_SERVER_NAME}\\\"}\" \\\n  --connect-timeout 10 \\\n  --max-time 30 \\\n  2>/dev/null) || true\n\n# Check if response contains tokens\nif echo \"$RESPONSE\" | grep -q \"sessionToken\"; then\n    # Extract tokens using sed (avoid jq dependency)\n    SESSION_TOKEN=$(echo \"$RESPONSE\" | sed -n 's/.*\"sessionToken\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p')\n    IDENTITY_TOKEN=$(echo \"$RESPONSE\" | sed -n 's/.*\"identityToken\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p')\n    \n    if [ -n \"$SESSION_TOKEN\" ] && [ -n \"$IDENTITY_TOKEN\" ]; then\n        echo \"  Session token: [obtained]\"\n        echo \"  Identity token: [obtained]\"\n    else\n        echo \"WARNING: Could not extract tokens from response\"\n        SESSION_TOKEN=\"\"\n        IDENTITY_TOKEN=\"\"\n    fi\nelse\n    echo \"WARNING: Failed to fetch tokens from auth server\"\n    echo \"  Response: $RESPONSE\"\n    echo \"  Server will start without F2P tokens (official auth only)\"\n    SESSION_TOKEN=\"\"\n    IDENTITY_TOKEN=\"\"\nfi\necho \"\"\n\necho \"Starting server...\"\necho \"\"\necho \"==========================================\"\necho \"  For official licensed clients, admin\"\necho \"  must run these commands in CONSOLE:\"\necho \"    /auth logout\"\necho \"    /auth persistence Encrypted\"\necho \"    /auth login device\"\necho \"==========================================\"\necho \"\"\n\n# Build Java command\nJAVA_CMD=\"java -Xms${HEAP_SIZE}M -Xmx${HEAP_SIZE}M\"\n\nif [ -n \"$JVM_ARGS\" ]; then\n    JAVA_CMD=\"$JAVA_CMD $JVM_ARGS\"\nfi\n\nJAVA_CMD=\"$JAVA_CMD -jar HytaleServer.jar\"\nJAVA_CMD=\"$JAVA_CMD --assets Assets.zip\"\nJAVA_CMD=\"$JAVA_CMD --bind 0.0.0.0:${HYTALE_PORT}\"\nJAVA_CMD=\"$JAVA_CMD --auth-mode ${AUTH_MODE}\"\nJAVA_CMD=\"$JAVA_CMD --disable-sentry\"\n\nif [ -d \"universe\" ]; then\n    JAVA_CMD=\"$JAVA_CMD --universe universe\"\nfi\n\nif [ \"${ENABLE_BACKUPS:-0}\" = \"1\" ]; then\n    JAVA_CMD=\"$JAVA_CMD --backup\"\n    if [ -n \"$BACKUP_DIR\" ]; then\n        JAVA_CMD=\"$JAVA_CMD --backup-dir $BACKUP_DIR\"\n    fi\n    if [ -n \"$BACKUP_FREQUENCY\" ]; then\n        JAVA_CMD=\"$JAVA_CMD --backup-frequency $BACKUP_FREQUENCY\"\n    fi\nfi\n\nif [ \"${ALLOW_OP:-0}\" = \"1\" ]; then\n    JAVA_CMD=\"$JAVA_CMD --allow-op\"\nfi\n\n# Add server tokens if available (required for F2P auth grants)\nif [ -n \"$SESSION_TOKEN\" ]; then\n    JAVA_CMD=\"$JAVA_CMD --session-token $SESSION_TOKEN\"\nfi\nif [ -n \"$IDENTITY_TOKEN\" ]; then\n    JAVA_CMD=\"$JAVA_CMD --identity-token $IDENTITY_TOKEN\"\nfi\n\nexec $JAVA_CMD\nSTARTSCRIPT\n\nchmod +x start.sh\necho \"Start script created.\"\n\n# ========================================\n# Step 1: Download from F2P Host\n# ========================================\necho \"\"\necho \"=== Step 1: F2P Server Download ===\"\necho \"Download URL: ${F2P_DOWNLOAD_BASE}\"\n\n# Download function with retry and progress on new lines\n# Pterodactyl console doesn't support curl's carriage-return progress\n# So we run curl in background and print progress on new lines\ndownload_file() {\n    local url=\"$1\"\n    local dest=\"$2\"\n    local name=\"$3\"\n    local expected_size_mb=\"$4\"  # Expected size in MB for progress calc\n    \n    echo \"\"\n    echo \"Downloading ${name}...\"\n    if [ -n \"$expected_size_mb\" ]; then\n        echo \"Expected size: ~${expected_size_mb} MB\"\n    fi\n    echo \"URL: ${url}\"\n    echo \"\"\n    \n    for attempt in 1 2 3; do\n        rm -f \"${dest}.tmp\"\n        \n        # Start curl in background (silent mode)\n        curl -fL -s -o \"${dest}.tmp\" \"${url}\" &\n        local curl_pid=$!\n        \n        # Monitor progress every 5 seconds\n        local last_size=0\n        local stall_count=0\n        while kill -0 $curl_pid 2>/dev/null; do\n            sleep 5\n            if [ -f \"${dest}.tmp\" ]; then\n                local current_size=$(stat -c%s \"${dest}.tmp\" 2>/dev/null || stat -f%z \"${dest}.tmp\" 2>/dev/null || echo \"0\")\n                local current_mb=$((current_size / 1024 / 1024))\n                \n                # Calculate speed (MB in last 5 seconds)\n                local delta=$((current_size - last_size))\n                local speed_mb=$((delta / 1024 / 1024 / 5))\n                if [ $speed_mb -lt 1 ]; then\n                    speed_mb=$((delta / 1024 / 5))  # KB/s\n                    if [ -n \"$expected_size_mb\" ] && [ \"$expected_size_mb\" -gt 0 ]; then\n                        local pct=$((current_mb * 100 / expected_size_mb))\n                        echo \"  Downloaded: ${current_mb} MB / ${expected_size_mb} MB (${pct}%) - ${speed_mb} KB/s\"\n                    else\n                        echo \"  Downloaded: ${current_mb} MB - ${speed_mb} KB/s\"\n                    fi\n                else\n                    if [ -n \"$expected_size_mb\" ] && [ \"$expected_size_mb\" -gt 0 ]; then\n                        local pct=$((current_mb * 100 / expected_size_mb))\n                        echo \"  Downloaded: ${current_mb} MB / ${expected_size_mb} MB (${pct}%) - ${speed_mb} MB/s\"\n                    else\n                        echo \"  Downloaded: ${current_mb} MB - ${speed_mb} MB/s\"\n                    fi\n                fi\n                \n                # Check for stall\n                if [ \"$current_size\" -eq \"$last_size\" ]; then\n                    stall_count=$((stall_count + 1))\n                    if [ $stall_count -ge 12 ]; then  # 60 seconds of no progress\n                        echo \"  WARNING: Download appears stalled\"\n                    fi\n                else\n                    stall_count=0\n                fi\n                last_size=$current_size\n            fi\n        done\n        \n        # Check if curl succeeded\n        wait $curl_pid\n        local curl_exit=$?\n        \n        if [ $curl_exit -eq 0 ] && [ -f \"${dest}.tmp\" ]; then\n            local final_size=$(stat -c%s \"${dest}.tmp\" 2>/dev/null || stat -f%z \"${dest}.tmp\" 2>/dev/null || echo \"0\")\n            local final_mb=$((final_size / 1024 / 1024))\n            echo \"\"\n            echo \"${name} downloaded successfully (${final_mb} MB)\"\n            mv \"${dest}.tmp\" \"${dest}\"\n            return 0\n        fi\n        \n        echo \"\"\n        echo \"Attempt ${attempt} failed (exit code: ${curl_exit}), retrying in 3 seconds...\"\n        rm -f \"${dest}.tmp\"\n        sleep 3\n    done\n    echo \"ERROR: Failed to download ${name} after 3 attempts\"\n    return 1\n}\n\n# Download HytaleServer.jar\nif [ -f \"HytaleServer.jar\" ] && [ \"${FORCE_DOWNLOAD:-0}\" != \"1\" ]; then\n    local_size=$(stat -c%s \"HytaleServer.jar\" 2>/dev/null || stat -f%z \"HytaleServer.jar\" 2>/dev/null || echo \"0\")\n    local_mb=$((local_size / 1024 / 1024))\n    echo \"HytaleServer.jar already exists (${local_mb} MB), skipping download.\"\n    echo \"Set FORCE_DOWNLOAD=1 to re-download.\"\nelse\n    if ! download_file \"${F2P_DOWNLOAD_BASE}/HytaleServer.jar\" \"HytaleServer.jar\" \"HytaleServer.jar\" \"80\"; then\n        echo \"ERROR: Failed to download HytaleServer.jar\"\n        exit 1\n    fi\nfi\n\n# Download Assets.zip\nif [ -f \"Assets.zip\" ] && [ \"${FORCE_DOWNLOAD:-0}\" != \"1\" ]; then\n    local_size=$(stat -c%s \"Assets.zip\" 2>/dev/null || stat -f%z \"Assets.zip\" 2>/dev/null || echo \"0\")\n    local_mb=$((local_size / 1024 / 1024))\n    echo \"Assets.zip already exists (${local_mb} MB), skipping download.\"\n    echo \"Set FORCE_DOWNLOAD=1 to re-download.\"\nelse\n    echo \"\"\n    echo \"============================================\"\n    echo \"Downloading Assets.zip (~3.3 GB)\"\n    echo \"This will take several minutes depending on\"\n    echo \"your connection speed. Please be patient.\"\n    echo \"============================================\"\n    if ! download_file \"${F2P_DOWNLOAD_BASE}/Assets.zip\" \"Assets.zip\" \"Assets.zip\" \"3300\"; then\n        echo \"ERROR: Failed to download Assets.zip\"\n        exit 1\n    fi\nfi\n\n# Verify files\necho \"\"\necho \"Verifying downloaded files...\"\nif [ ! -f \"HytaleServer.jar\" ]; then\n    echo \"ERROR: HytaleServer.jar not found!\"\n    exit 1\nfi\n\nif [ ! -f \"Assets.zip\" ]; then\n    echo \"ERROR: Assets.zip not found!\"\n    exit 1\nfi\n\njar_size=$(stat -c%s \"HytaleServer.jar\" 2>/dev/null || stat -f%z \"HytaleServer.jar\" 2>/dev/null || echo \"0\")\nassets_size=$(stat -c%s \"Assets.zip\" 2>/dev/null || stat -f%z \"Assets.zip\" 2>/dev/null || echo \"0\")\njar_mb=$((jar_size / 1024 / 1024))\nassets_mb=$((assets_size / 1024 / 1024))\n\necho \"  HytaleServer.jar: ${jar_mb} MB\"\necho \"  Assets.zip: ${assets_mb} MB\"\necho \"Server files verified.\"\n\n# ========================================\n# Step 2: Setup Patcher\n# ========================================\necho \"\"\necho \"=== Step 2: Setting up DualAuthPatcher ===\"\n\nmkdir -p patcher/lib\n\necho \"Downloading ASM libraries...\"\ncurl -sL \"https://repo1.maven.org/maven2/org/ow2/asm/asm/${ASM_VERSION}/asm-${ASM_VERSION}.jar\" -o patcher/lib/asm-${ASM_VERSION}.jar\ncurl -sL \"https://repo1.maven.org/maven2/org/ow2/asm/asm-tree/${ASM_VERSION}/asm-tree-${ASM_VERSION}.jar\" -o patcher/lib/asm-tree-${ASM_VERSION}.jar\ncurl -sL \"https://repo1.maven.org/maven2/org/ow2/asm/asm-util/${ASM_VERSION}/asm-util-${ASM_VERSION}.jar\" -o patcher/lib/asm-util-${ASM_VERSION}.jar\n\necho \"Downloading DualAuthPatcher...\"\ncurl -sL \"${PATCHER_URL}\" -o patcher/DualAuthPatcher.java\n\necho \"Compiling patcher...\"\njavac -cp \"patcher/lib/asm-${ASM_VERSION}.jar:patcher/lib/asm-tree-${ASM_VERSION}.jar:patcher/lib/asm-util-${ASM_VERSION}.jar\" -d patcher patcher/DualAuthPatcher.java\n\necho \"Patcher ready.\"\n\n# ========================================\n# Step 3: Patch Server for Dual Auth\n# ========================================\necho \"\"\necho \"=== Step 3: Patching for Dual Authentication ===\"\n\nis_jar_patched() {\n    if unzip -l HytaleServer.jar 2>/dev/null | grep -q \"$INJECTED_CLASS\"; then\n        return 0\n    fi\n    return 1\n}\n\nif is_jar_patched; then\n    echo \"JAR already contains dual auth classes\"\n    echo \"patched=true\" > .patched_dual_auth\n    echo \"date=$(date -Iseconds 2>/dev/null || date)\" >> .patched_dual_auth\n    echo \"domain=${AUTH_DOMAIN}\" >> .patched_dual_auth\n    echo \"Server already patched, skipping\"\nelse\n    if [ -f \".patched_dual_auth\" ]; then\n        echo \"WARNING: Flag file exists but JAR is not patched\"\n        rm -f .patched_dual_auth\n    fi\n    \n    if [ -f \"HytaleServer.jar.original\" ]; then\n        CURRENT_SIZE=$(stat -c%s HytaleServer.jar 2>/dev/null || stat -f%z HytaleServer.jar 2>/dev/null)\n        BACKUP_SIZE=$(stat -c%s HytaleServer.jar.original 2>/dev/null || stat -f%z HytaleServer.jar.original 2>/dev/null)\n        if [ \"$CURRENT_SIZE\" != \"$BACKUP_SIZE\" ]; then\n            TIMESTAMP=$(date +%Y%m%d_%H%M%S)\n            mv HytaleServer.jar.original \"HytaleServer.jar.original.${TIMESTAMP}\"\n            cp HytaleServer.jar HytaleServer.jar.original\n        fi\n    else\n        cp HytaleServer.jar HytaleServer.jar.original\n        echo \"Backup created: HytaleServer.jar.original\"\n    fi\n    \n    echo \"Patching server JAR...\"\n    CLASSPATH=\"patcher/lib/asm-${ASM_VERSION}.jar:patcher/lib/asm-tree-${ASM_VERSION}.jar:patcher/lib/asm-util-${ASM_VERSION}.jar:patcher\"\n    java -cp \"${CLASSPATH}\" DualAuthPatcher HytaleServer.jar\n    \n    if is_jar_patched; then\n        echo \"Patch verification: SUCCESS\"\n        echo \"patched=true\" > .patched_dual_auth\n        echo \"date=$(date -Iseconds 2>/dev/null || date)\" >> .patched_dual_auth\n        echo \"domain=${AUTH_DOMAIN}\" >> .patched_dual_auth\n        echo \"Server patched successfully!\"\n    else\n        echo \"ERROR: Patch verification FAILED\"\n        exit 1\n    fi\nfi\n\n# ========================================\n# Done\n# ========================================\necho \"\"\necho \"========================================\"\necho \"=== Installation Complete ===\"\necho \"========================================\"\necho \"\"\necho \"Server configured for DUAL AUTHENTICATION:\"\necho \"  - F2P clients: Connect directly\"\necho \"  - Official clients (${AUTH_DOMAIN}): Run IN-GAME:\"\necho \"      /auth logout\"\necho \"      /auth persistence Encrypted\"\necho \"      /auth login device\"\necho \"    Then complete Hytale auth (game license required)\"\necho \"\"\necho \"On each server start, tokens will be fetched from:\"\necho \"  https://${AUTH_DOMAIN}/server/auto-auth\"\necho \"\"\necho \"Files:\"\nls -lh *.jar *.zip 2>/dev/null || true\necho \"\"\n",
+            "container": "ghcr.io/parkervcp/installers:debian",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "F2P Download Base URL",
+            "description": "Base URL for downloading server files. Default: https://download.sanasol.ws/download",
+            "env_variable": "F2P_DOWNLOAD_BASE",
+            "default_value": "https://download.sanasol.ws/download",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|url",
+            "field_type": "text"
+        },
+        {
+            "name": "Auth Domain",
+            "description": "F2P authentication server domain. Default: auth.sanasol.ws (4-16 chars)",
+            "env_variable": "AUTH_DOMAIN",
+            "default_value": "auth.sanasol.ws",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|min:4|max:16",
+            "field_type": "text"
+        },
+        {
+            "name": "Server Port",
+            "description": "UDP port for the game server.",
+            "env_variable": "HYTALE_PORT",
+            "default_value": "5520",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|integer|min:1024|max:65535",
+            "field_type": "text"
+        },
+        {
+            "name": "Memory Overhead",
+            "description": "Memory reserved for JVM overhead in MB (subtracted from allocation).",
+            "env_variable": "MEMORY_OVERHEAD",
+            "default_value": "256",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer|min:0",
+            "field_type": "text"
+        },
+        {
+            "name": "Server Name",
+            "description": "Display name for your server (used for token registration).",
+            "env_variable": "HYTALE_SERVER_NAME",
+            "default_value": "Hytale F2P Server",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:64",
+            "field_type": "text"
+        },
+        {
+            "name": "Authentication Mode",
+            "description": "Server authentication mode.",
+            "env_variable": "AUTH_MODE",
+            "default_value": "authenticated",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:authenticated,unauthenticated,singleplayer",
+            "field_type": "text"
+        },
+        {
+            "name": "JVM Arguments",
+            "description": "Additional Java Virtual Machine arguments.",
+            "env_variable": "JVM_ARGS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Force Download",
+            "description": "Set to 1 to force re-download of server files even if they exist.",
+            "env_variable": "FORCE_DOWNLOAD",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Enable Backups",
+            "description": "Enable automatic world backups.",
+            "env_variable": "ENABLE_BACKUPS",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Backup Directory",
+            "description": "Directory for backups (relative to server root).",
+            "env_variable": "BACKUP_DIR",
+            "default_value": "backups",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:128",
+            "field_type": "text"
+        },
+        {
+            "name": "Backup Frequency",
+            "description": "Backup frequency in minutes.",
+            "env_variable": "BACKUP_FREQUENCY",
+            "default_value": "30",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer|min:1",
+            "field_type": "text"
+        },
+        {
+            "name": "Allow Self Operator",
+            "description": "Allow players to use /op command to give themselves operator permissions.",
+            "env_variable": "ALLOW_OP",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        }
+    ]
+}

@@ -80,6 +80,12 @@ HYTALE_VALIDATE_PREFABS="${HYTALE_VALIDATE_PREFABS:-}"
 HYTALE_VALIDATE_WORLD_GEN="${HYTALE_VALIDATE_WORLD_GEN:-false}"
 HYTALE_WORLD_GEN_PATH="${HYTALE_WORLD_GEN_PATH:-}"
 
+# F2P download (default) - downloads pre-patched server from F2P host
+HYTALE_F2P_DOWNLOAD="${HYTALE_F2P_DOWNLOAD:-true}"
+HYTALE_F2P_AUTO_UPDATE="${HYTALE_F2P_AUTO_UPDATE:-false}"
+HYTALE_F2P_DOWNLOAD_BASE="${HYTALE_F2P_DOWNLOAD_BASE:-https://download.sanasol.ws/download}"
+
+# Official Hytale download (optional) - requires device code auth
 HYTALE_AUTO_DOWNLOAD="${HYTALE_AUTO_DOWNLOAD:-false}"
 HYTALE_AUTO_UPDATE="${HYTALE_AUTO_UPDATE:-true}"
 
@@ -146,19 +152,35 @@ setup_machine_id() {
 
 setup_machine_id
 
-log "Thank you for using the Hytale Server Docker Image by Hybrowse!"
-log "- Add your server to our server list: https://hybrowse.gg"
-log "- GitHub: https://github.com/Hybrowse/hytale-server-docker"
-log "- Console: 'docker compose attach hytale' (detach: Ctrl-p then Ctrl-q)"
+log "=========================================="
+log "  Hytale F2P Server Docker Image"
+log "=========================================="
+log ""
+log "GitHub: https://github.com/sanasol/hytale-server-docker"
+log "Console: 'docker compose attach hytale' (detach: Ctrl-p then Ctrl-q)"
+log ""
+log "DUAL AUTHENTICATION SUPPORTED:"
+log "  - F2P clients: Connect directly (no setup needed)"
+log "  - Official clients: Admin runs in SERVER CONSOLE:"
+log "      /auth logout"
+log "      /auth persistence Encrypted"
+log "      /auth login device"
+log "    Then complete Hytale auth to get server tokens"
 log ""
 
-if is_true "${HYTALE_AUTO_DOWNLOAD}"; then
-  log "Auto-download: enabled (first run may require opening an auth URL from the logs)"
+# Determine download mode
+download_mode="none"
+if is_true "${HYTALE_F2P_DOWNLOAD}"; then
+  download_mode="f2p"
+  log "Download mode: F2P (from ${HYTALE_F2P_DOWNLOAD_BASE})"
+elif is_true "${HYTALE_AUTO_DOWNLOAD}"; then
+  download_mode="official"
+  log "Download mode: Official Hytale (first run may require device code auth)"
 fi
 
 missing=0
 if [ ! -f "${HYTALE_SERVER_JAR}" ]; then
-  if is_true "${HYTALE_AUTO_DOWNLOAD}"; then
+  if [ "${download_mode}" != "none" ]; then
     log "Missing server jar: ${HYTALE_SERVER_JAR}"
   else
     log "ERROR: Missing server jar: ${HYTALE_SERVER_JAR}"
@@ -166,7 +188,7 @@ if [ ! -f "${HYTALE_SERVER_JAR}" ]; then
   missing=1
 fi
 if [ ! -f "${HYTALE_ASSETS_PATH}" ]; then
-  if is_true "${HYTALE_AUTO_DOWNLOAD}"; then
+  if [ "${download_mode}" != "none" ]; then
     log "Missing assets: ${HYTALE_ASSETS_PATH}"
   else
     log "ERROR: Missing assets: ${HYTALE_ASSETS_PATH}"
@@ -174,7 +196,31 @@ if [ ! -f "${HYTALE_ASSETS_PATH}" ]; then
   missing=1
 fi
 
-if is_true "${HYTALE_AUTO_DOWNLOAD}"; then
+# F2P download (default) - downloads pre-patched server from F2P host
+if [ "${download_mode}" = "f2p" ]; then
+  if [ "${missing}" -ne 0 ]; then
+    log "Attempting F2P download from ${HYTALE_F2P_DOWNLOAD_BASE}"
+    /usr/local/bin/hytale-f2p-download
+
+    missing=0
+    if [ ! -f "${HYTALE_SERVER_JAR}" ]; then
+      log "ERROR: Missing server jar: ${HYTALE_SERVER_JAR}"
+      missing=1
+    fi
+    if [ ! -f "${HYTALE_ASSETS_PATH}" ]; then
+      log "ERROR: Missing assets: ${HYTALE_ASSETS_PATH}"
+      missing=1
+    fi
+  else
+    if is_true "${HYTALE_F2P_AUTO_UPDATE}"; then
+      log "Checking for F2P updates from ${HYTALE_F2P_DOWNLOAD_BASE}"
+      /usr/local/bin/hytale-f2p-download
+    fi
+  fi
+fi
+
+# Official Hytale download (optional) - requires device code auth
+if [ "${download_mode}" = "official" ]; then
   if [ "${missing}" -ne 0 ]; then
     log "Attempting auto-download via official Hytale Downloader"
     /usr/local/bin/hytale-auto-download
@@ -203,12 +249,14 @@ if [ "${missing}" -ne 0 ]; then
   log "  ${SERVER_DIR}/HytaleServer.jar"
   log ""
   log "How to fix:"
-  log "- Place the official server files into ${SERVER_DIR}/"
-  log "- Place Assets.zip into ${DATA_DIR}/Assets.zip"
-  log "- Or set HYTALE_AUTO_DOWNLOAD=true"
-  log "- On Apple Silicon (arm64): auto-download requires running the container as linux/amd64 (Docker Compose: platform: linux/amd64)"
-  log "- See https://github.com/Hybrowse/hytale-server-docker/blob/main/docs/image/server-files.md"
-  log "- See https://github.com/Hybrowse/hytale-server-docker/blob/main/docs/image/quickstart.md"
+  log "- F2P mode (default): Set HYTALE_F2P_DOWNLOAD=true to download pre-patched server"
+  log "- Official mode: Set HYTALE_AUTO_DOWNLOAD=true and HYTALE_F2P_DOWNLOAD=false"
+  log "- Manual: Place server files into ${SERVER_DIR}/ and Assets.zip into ${DATA_DIR}/"
+  log ""
+  log "F2P download URL: ${HYTALE_F2P_DOWNLOAD_BASE:-https://download.sanasol.ws/download}"
+  log "On Apple Silicon (arm64): F2P download works natively, official requires linux/amd64"
+  log ""
+  log "See https://github.com/sanasol/hytale-server-docker for documentation"
   exit 1
 fi
 
@@ -223,7 +271,7 @@ fi
 
 DATA_DIR="${DATA_DIR:-/data}"
 SERVER_DIR="${SERVER_DIR:-/data/server}"
-export DATA_DIR SERVER_DIR
+export DATA_DIR SERVER_DIR HYTALE_F2P_DOWNLOAD_BASE HYTALE_F2P_AUTO_UPDATE
 
 /usr/local/bin/hytale-prestart-downloads
 

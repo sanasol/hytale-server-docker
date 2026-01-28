@@ -1,0 +1,132 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY - https://github.com/sanasol/hytale-server-docker",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-01-28T00:00:00+00:00",
+    "name": "Hytale Server (Official Download)",
+    "author": "sanasol@sanasol.ws",
+    "description": "Hytale game server - downloads from official Hytale servers (requires device code authentication). Supports both F2P and official licensed clients. For official clients: admin runs /auth logout, /auth persistence Encrypted, /auth login device in server console.",
+    "features": null,
+    "docker_images": {
+        "Java 21": "ghcr.io/pterodactyl/yolks:java_21"
+    },
+    "file_denylist": [],
+    "startup": "./start.sh",
+    "config": {
+        "files": "{}",
+        "startup": "{\r\n    \"done\": \"Server fully started\"\r\n}",
+        "logs": "{}",
+        "stop": "stop"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# Hytale Dual Auth Server Installation Script\n# Supports both official Hytale clients and F2P clients\n\necho \"=== Hytale Dual Auth Server Installation ===\"\necho \"Supports both official Hytale clients and F2P clients\"\necho \"\"\n\n# Install required packages\necho \"Installing required packages...\"\napt-get update\napt-get install -y unzip curl default-jdk\n\n# Configuration\nAUTH_DOMAIN=\"${AUTH_DOMAIN:-auth.sanasol.ws}\"\nASM_VERSION=\"9.6\"\nHYTALE_DOWNLOADER_URL=\"https://downloader.hytale.com/hytale-downloader.zip\"\nPATCHER_URL=\"https://raw.githubusercontent.com/sanasol/hytale-auth-server/master/patcher/DualAuthPatcher.java\"\nINJECTED_CLASS=\"com/hypixel/hytale/server/core/auth/DualAuthContext.class\"\n\ncd /mnt/server\n\n# ========================================\n# Step 0: Create start.sh early (so server does not crash if install fails)\n# ========================================\necho \"\"\necho \"=== Step 0: Creating start script ===\"\n\ncat > start.sh << 'STARTSCRIPT'\n#!/bin/bash\n# Hytale Dual Auth Server Start Script\nset -e\n\necho \"=== Hytale Dual Auth Server ===\"\necho \"Supports: Official Hytale + F2P clients\"\necho \"\"\n\n# Configuration\nAUTH_DOMAIN=\"${AUTH_DOMAIN:-auth.sanasol.ws}\"\n# Use Pterodactyl's SERVER_PORT if available, otherwise fall back to HYTALE_PORT\nHYTALE_PORT=\"${SERVER_PORT:-${HYTALE_PORT:-5520}}\"\nMEMORY_OVERHEAD=\"${MEMORY_OVERHEAD:-256}\"\nAUTH_MODE=\"${AUTH_MODE:-authenticated}\"\nHYTALE_SERVER_NAME=\"${HYTALE_SERVER_NAME:-Hytale Dual Auth Server}\"\nJVM_ARGS=\"${JVM_ARGS:-}\"\n\n# Calculate heap size from SERVER_MEMORY (Pterodactyl built-in)\n# Handle unlimited memory (0 or empty) by detecting available system memory\nSERVER_MEM=${SERVER_MEMORY:-0}\nif [ \"$SERVER_MEM\" -le 0 ] 2>/dev/null || [ -z \"$SERVER_MEM\" ]; then\n    # Detect available memory from system\n    if [ -f /sys/fs/cgroup/memory.max ]; then\n        # cgroup v2\n        CGROUP_MEM=$(cat /sys/fs/cgroup/memory.max 2>/dev/null)\n        if [ \"$CGROUP_MEM\" != \"max\" ] && [ -n \"$CGROUP_MEM\" ]; then\n            SERVER_MEM=$((CGROUP_MEM / 1024 / 1024))\n        fi\n    elif [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then\n        # cgroup v1\n        CGROUP_MEM=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null)\n        # Check if it is not the unlimited value (usually a very large number)\n        if [ \"$CGROUP_MEM\" -lt 9223372036854771712 ] 2>/dev/null && [ -n \"$CGROUP_MEM\" ]; then\n            SERVER_MEM=$((CGROUP_MEM / 1024 / 1024))\n        fi\n    fi\n    # If still 0, use physical memory\n    if [ \"$SERVER_MEM\" -le 0 ] 2>/dev/null; then\n        SERVER_MEM=$(free -m 2>/dev/null | awk '/^Mem:/{print $2}')\n        # Use 80% of available memory to leave room for OS\n        SERVER_MEM=$((SERVER_MEM * 80 / 100))\n    fi\n    # Final fallback\n    if [ \"$SERVER_MEM\" -le 0 ] 2>/dev/null || [ -z \"$SERVER_MEM\" ]; then\n        SERVER_MEM=4096\n    fi\n    echo \"Note: No memory limit set, detected ${SERVER_MEM}MB available\"\nfi\nHEAP_SIZE=$((SERVER_MEM - MEMORY_OVERHEAD))\nif [ $HEAP_SIZE -lt 1024 ]; then\n    HEAP_SIZE=1024\nfi\n\necho \"Auth Domain: $AUTH_DOMAIN\"\necho \"Server Port: $HYTALE_PORT (UDP)\"\nif [ -n \"$SERVER_PORT\" ]; then\n    echo \"  (from Pterodactyl allocation)\"\nelse\n    echo \"  (from HYTALE_PORT variable or default)\"\nfi\necho \"Auth Mode: $AUTH_MODE\"\necho \"Memory: ${HEAP_SIZE}M\"\necho \"\"\n\n# Check required files\nif [ ! -f \"HytaleServer.jar\" ]; then\n    echo \"ERROR: HytaleServer.jar not found!\"\n    echo \"Run the installer again to download and patch the server.\"\n    exit 1\nfi\n\nif [ ! -f \"Assets.zip\" ]; then\n    echo \"ERROR: Assets.zip not found!\"\n    echo \"Run the installer again to download the server files.\"\n    exit 1\nfi\n\n# ========================================\n# Fetch Server Tokens from Auth Server\n# ========================================\necho \"Fetching server tokens from F2P auth server...\"\n\n# Generate or load persistent server ID\nif [ -f \".server-id\" ]; then\n    SERVER_ID=$(cat .server-id)\nelse\n    SERVER_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || echo \"server-$(hostname)-$(date +%s)\")\n    echo \"$SERVER_ID\" > .server-id\nfi\n\necho \"  Server ID: $SERVER_ID\"\necho \"  Server Name: $HYTALE_SERVER_NAME\"\n\n# F2P uses single endpoint without subdomains\nAUTH_SERVER_URL=\"https://${AUTH_DOMAIN}\"\n\n# Call the auto-auth endpoint\nRESPONSE=$(curl -s -X POST \"${AUTH_SERVER_URL}/server/auto-auth\" \\\n  -H \"Content-Type: application/json\" \\\n  -d \"{\\\"server_id\\\": \\\"${SERVER_ID}\\\", \\\"server_name\\\": \\\"${HYTALE_SERVER_NAME}\\\"}\" \\\n  --connect-timeout 10 \\\n  --max-time 30 \\\n  2>/dev/null) || true\n\n# Check if response contains tokens\nif echo \"$RESPONSE\" | grep -q \"sessionToken\"; then\n    # Extract tokens using sed (avoid jq dependency)\n    SESSION_TOKEN=$(echo \"$RESPONSE\" | sed -n 's/.*\"sessionToken\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p')\n    IDENTITY_TOKEN=$(echo \"$RESPONSE\" | sed -n 's/.*\"identityToken\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p')\n    \n    if [ -n \"$SESSION_TOKEN\" ] && [ -n \"$IDENTITY_TOKEN\" ]; then\n        echo \"  Session token: [obtained]\"\n        echo \"  Identity token: [obtained]\"\n    else\n        echo \"WARNING: Could not extract tokens from response\"\n        SESSION_TOKEN=\"\"\n        IDENTITY_TOKEN=\"\"\n    fi\nelse\n    echo \"WARNING: Failed to fetch tokens from auth server\"\n    echo \"  Response: $RESPONSE\"\n    echo \"  Server will start without F2P tokens (official auth only)\"\n    SESSION_TOKEN=\"\"\n    IDENTITY_TOKEN=\"\"\nfi\necho \"\"\n\necho \"Starting server...\"\necho \"\"\necho \"==========================================\"\necho \"DUAL AUTHENTICATION SUPPORTED\"\necho \"==========================================\"\necho \"F2P clients: Connect directly (no setup needed)\"\necho \"\"\necho \"Official/Licensed clients: Admin runs in SERVER CONSOLE:\"\necho \"  /auth logout\"\necho \"  /auth persistence Encrypted\"\necho \"  /auth login device\"\necho \"Then complete Hytale auth in browser (game license required)\"\necho \"==========================================\"\necho \"\"\n\n# Build Java command\nJAVA_CMD=\"java -Xms${HEAP_SIZE}M -Xmx${HEAP_SIZE}M\"\n\n# Add custom JVM args\nif [ -n \"$JVM_ARGS\" ]; then\n    JAVA_CMD=\"$JAVA_CMD $JVM_ARGS\"\nfi\n\n# Add JAR\nJAVA_CMD=\"$JAVA_CMD -jar HytaleServer.jar\"\n\n# Add server arguments\nJAVA_CMD=\"$JAVA_CMD --assets Assets.zip\"\nJAVA_CMD=\"$JAVA_CMD --bind 0.0.0.0:${HYTALE_PORT}\"\nJAVA_CMD=\"$JAVA_CMD --auth-mode ${AUTH_MODE}\"\nJAVA_CMD=\"$JAVA_CMD --disable-sentry\"\n\n# Add universe path if exists\nif [ -d \"universe\" ]; then\n    JAVA_CMD=\"$JAVA_CMD --universe universe\"\nfi\n\n# Add backup options if enabled\nif [ \"${ENABLE_BACKUPS:-0}\" = \"1\" ]; then\n    JAVA_CMD=\"$JAVA_CMD --backup\"\n    if [ -n \"$BACKUP_DIR\" ]; then\n        JAVA_CMD=\"$JAVA_CMD --backup-dir $BACKUP_DIR\"\n    fi\n    if [ -n \"$BACKUP_FREQUENCY\" ]; then\n        JAVA_CMD=\"$JAVA_CMD --backup-frequency $BACKUP_FREQUENCY\"\n    fi\nfi\n\n# Add operator permissions if enabled\nif [ \"${ALLOW_OP:-0}\" = \"1\" ]; then\n    JAVA_CMD=\"$JAVA_CMD --allow-op\"\nfi\n\n# Add server tokens if available (required for F2P auth grants)\nif [ -n \"$SESSION_TOKEN\" ]; then\n    JAVA_CMD=\"$JAVA_CMD --session-token $SESSION_TOKEN\"\nfi\nif [ -n \"$IDENTITY_TOKEN\" ]; then\n    JAVA_CMD=\"$JAVA_CMD --identity-token $IDENTITY_TOKEN\"\nfi\n\n# Execute\nexec $JAVA_CMD\nSTARTSCRIPT\n\nchmod +x start.sh\necho \"Start script created.\"\n\n# ========================================\n# Step 1: Download Official Server\n# ========================================\necho \"\"\necho \"=== Step 1: Official Server Download ===\"\n\nif [ -f \"HytaleServer.jar\" ] && [ -f \"Assets.zip\" ]; then\n    echo \"Server files already present, skipping download.\"\n    echo \"Delete HytaleServer.jar and Assets.zip to re-download.\"\nelse\n    echo \"Downloading official Hytale downloader...\"\n    mkdir -p .hytale-downloader\n    curl -fsSL \"${HYTALE_DOWNLOADER_URL}\" -o .hytale-downloader/hytale-downloader.zip\n    \n    # Extract the correct binary for architecture\n    ARCH=$(uname -m)\n    case \"${ARCH}\" in\n        x86_64|amd64)\n            BIN_NAME=\"hytale-downloader-linux-amd64\"\n            ;;\n        aarch64|arm64)\n            echo \"ERROR: arm64 not supported by official downloader.\"\n            echo \"Please provide HytaleServer.jar and Assets.zip manually.\"\n            exit 1\n            ;;\n        *)\n            echo \"ERROR: Unsupported architecture: ${ARCH}\"\n            exit 1\n            ;;\n    esac\n    \n    echo \"Extracting downloader binary...\"\n    unzip -o -p .hytale-downloader/hytale-downloader.zip \"${BIN_NAME}\" > .hytale-downloader/hytale-downloader\n    chmod +x .hytale-downloader/hytale-downloader\n    \n    echo \"\"\n    echo \"Running official Hytale downloader...\"\n    echo \"NOTE: First run requires device-code authentication.\"\n    echo \"      Check the console for a URL and code to enter.\"\n    echo \"\"\n    \n    # Run downloader - do not exit on failure\n    if ./.hytale-downloader/hytale-downloader -download-path game.zip; then\n        echo \"Download successful!\"\n    else\n        echo \"\"\n        echo \"========================================\"\n        echo \"AUTHENTICATION REQUIRED\"\n        echo \"========================================\"\n        echo \"\"\n        echo \"The downloader requires device-code authentication.\"\n        echo \"Look above for a URL and device code.\"\n        echo \"\"\n        echo \"To complete setup:\"\n        echo \"  1. Open the URL shown above in a browser\"\n        echo \"  2. Enter the device code shown\"\n        echo \"  3. Run the installer again\"\n        echo \"\"\n        echo \"The start script has been created, but the server\"\n        echo \"cannot start without HytaleServer.jar and Assets.zip.\"\n        exit 1\n    fi\n    \n    if [ -f \"game.zip\" ]; then\n        echo \"Extracting server files...\"\n        unzip -o game.zip 'Assets.zip' -d .\n        unzip -o game.zip 'Server/*' -d .\n        \n        # Move server files to root\n        if [ -d \"Server\" ]; then\n            mv Server/* . 2>/dev/null || true\n            rmdir Server 2>/dev/null || true\n        fi\n        \n        # Cleanup\n        rm -f game.zip\n        echo \"Server files extracted successfully.\"\n    else\n        echo \"ERROR: game.zip not found after download.\"\n        exit 1\n    fi\nfi\n\n# Verify files\nif [ ! -f \"HytaleServer.jar\" ]; then\n    echo \"ERROR: HytaleServer.jar not found!\"\n    exit 1\nfi\n\nif [ ! -f \"Assets.zip\" ]; then\n    echo \"ERROR: Assets.zip not found!\"\n    exit 1\nfi\n\necho \"Server files verified.\"\n\n# ========================================\n# Step 2: Setup Patcher\n# ========================================\necho \"\"\necho \"=== Step 2: Setting up DualAuthPatcher ===\"\n\nmkdir -p patcher/lib\n\n# Download ASM libraries\necho \"Downloading ASM libraries...\"\ncurl -sL \"https://repo1.maven.org/maven2/org/ow2/asm/asm/${ASM_VERSION}/asm-${ASM_VERSION}.jar\" -o patcher/lib/asm-${ASM_VERSION}.jar\ncurl -sL \"https://repo1.maven.org/maven2/org/ow2/asm/asm-tree/${ASM_VERSION}/asm-tree-${ASM_VERSION}.jar\" -o patcher/lib/asm-tree-${ASM_VERSION}.jar\ncurl -sL \"https://repo1.maven.org/maven2/org/ow2/asm/asm-util/${ASM_VERSION}/asm-util-${ASM_VERSION}.jar\" -o patcher/lib/asm-util-${ASM_VERSION}.jar\n\n# Download patcher from hytale-auth-server (authoritative source)\necho \"Downloading DualAuthPatcher...\"\ncurl -sL \"${PATCHER_URL}\" -o patcher/DualAuthPatcher.java\n\n# Compile patcher\necho \"Compiling patcher...\"\njavac -cp \"patcher/lib/asm-${ASM_VERSION}.jar:patcher/lib/asm-tree-${ASM_VERSION}.jar:patcher/lib/asm-util-${ASM_VERSION}.jar\" -d patcher patcher/DualAuthPatcher.java\n\necho \"Patcher ready.\"\n\n# ========================================\n# Step 3: Patch Server for Dual Auth\n# ========================================\necho \"\"\necho \"=== Step 3: Patching for Dual Authentication ===\"\n\n# Function to check if JAR is actually patched (more reliable than flag file)\nis_jar_patched() {\n    if unzip -l HytaleServer.jar 2>/dev/null | grep -q \"$INJECTED_CLASS\"; then\n        return 0\n    fi\n    return 1\n}\n\n# Check actual JAR state (not just flag file)\nif is_jar_patched; then\n    echo \"JAR already contains dual auth classes (DualAuthContext found)\"\n    # Update flag file to match current state\n    echo \"patched=true\" > .patched_dual_auth\n    echo \"date=$(date -Iseconds 2>/dev/null || date)\" >> .patched_dual_auth\n    echo \"domain=${AUTH_DOMAIN}\" >> .patched_dual_auth\n    echo \"verified=jar_contents\" >> .patched_dual_auth\n    echo \"Server already patched for dual auth, skipping\"\nelse\n    # JAR is not patched - clean up stale flag file if it exists\n    if [ -f \".patched_dual_auth\" ]; then\n        echo \"WARNING: Flag file exists but JAR is not patched (JAR was likely updated)\"\n        echo \"Removing stale flag file and re-patching...\"\n        rm -f .patched_dual_auth\n    fi\n    \n    # Backup original\n    if [ -f \"HytaleServer.jar.original\" ]; then\n        # Check if backup is different from current JAR (JAR was updated)\n        CURRENT_SIZE=$(stat -c%s HytaleServer.jar 2>/dev/null || stat -f%z HytaleServer.jar 2>/dev/null)\n        BACKUP_SIZE=$(stat -c%s HytaleServer.jar.original 2>/dev/null || stat -f%z HytaleServer.jar.original 2>/dev/null)\n        if [ \"$CURRENT_SIZE\" != \"$BACKUP_SIZE\" ]; then\n            echo \"JAR size changed (update detected), creating new backup...\"\n            TIMESTAMP=$(date +%Y%m%d_%H%M%S)\n            mv HytaleServer.jar.original \"HytaleServer.jar.original.${TIMESTAMP}\"\n            cp HytaleServer.jar HytaleServer.jar.original\n            echo \"Previous backup renamed to: HytaleServer.jar.original.${TIMESTAMP}\"\n        else\n            echo \"Using existing backup: HytaleServer.jar.original\"\n        fi\n    else\n        cp HytaleServer.jar HytaleServer.jar.original\n        echo \"Backup created: HytaleServer.jar.original\"\n    fi\n    \n    # Run patcher\n    echo \"Patching server JAR...\"\n    CLASSPATH=\"patcher/lib/asm-${ASM_VERSION}.jar:patcher/lib/asm-tree-${ASM_VERSION}.jar:patcher/lib/asm-util-${ASM_VERSION}.jar:patcher\"\n    java -cp \"${CLASSPATH}\" DualAuthPatcher HytaleServer.jar\n    \n    # Verify patch was successful\n    if is_jar_patched; then\n        echo \"\"\n        echo \"Patch verification: SUCCESS (DualAuthContext.class found in JAR)\"\n        \n        # Mark as patched with verification info\n        echo \"patched=true\" > .patched_dual_auth\n        echo \"date=$(date -Iseconds 2>/dev/null || date)\" >> .patched_dual_auth\n        echo \"domain=${AUTH_DOMAIN}\" >> .patched_dual_auth\n        echo \"verified=jar_contents\" >> .patched_dual_auth\n        JAR_SIZE=$(stat -c%s HytaleServer.jar 2>/dev/null || stat -f%z HytaleServer.jar 2>/dev/null)\n        echo \"jar_size=${JAR_SIZE}\" >> .patched_dual_auth\n        \n        echo \"Server patched successfully!\"\n    else\n        echo \"\"\n        echo \"ERROR: Patch verification FAILED - DualAuthContext.class not found in JAR\"\n        echo \"The patcher may have failed. Check the output above for errors.\"\n        exit 1\n    fi\nfi\n\n# ========================================\n# Done\n# ========================================\necho \"\"\necho \"========================================\"\necho \"=== Installation Complete ===\"\necho \"========================================\"\necho \"\"\necho \"Server is configured for DUAL AUTHENTICATION:\"\necho \"  - Official Hytale clients can connect\"\necho \"  - F2P clients (${AUTH_DOMAIN}) can connect\"\necho \"\"\necho \"Files:\"\nls -la *.jar *.zip 2>/dev/null || true\necho \"\"\n",
+            "container": "ghcr.io/parkervcp/installers:debian",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Auth Domain",
+            "description": "F2P authentication server domain (for F2P client support). Default: auth.sanasol.ws (unified endpoint, 4-16 chars supported).",
+            "env_variable": "AUTH_DOMAIN",
+            "default_value": "auth.sanasol.ws",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|min:4|max:16",
+            "field_type": "text"
+        },
+        {
+            "name": "Server Port",
+            "description": "UDP port for the game server.",
+            "env_variable": "HYTALE_PORT",
+            "default_value": "5520",
+            "user_viewable": true,
+            "user_editable": false,
+            "rules": "required|integer|min:1024|max:65535",
+            "field_type": "text"
+        },
+        {
+            "name": "Memory Overhead",
+            "description": "Memory reserved for JVM overhead in MB (subtracted from allocation).",
+            "env_variable": "MEMORY_OVERHEAD",
+            "default_value": "256",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer|min:0",
+            "field_type": "text"
+        },
+        {
+            "name": "Server Name",
+            "description": "Display name for your server.",
+            "env_variable": "HYTALE_SERVER_NAME",
+            "default_value": "Hytale Dual Auth Server",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:64",
+            "field_type": "text"
+        },
+        {
+            "name": "Authentication Mode",
+            "description": "Server authentication mode.",
+            "env_variable": "AUTH_MODE",
+            "default_value": "authenticated",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|in:authenticated,unauthenticated,singleplayer",
+            "field_type": "text"
+        },
+        {
+            "name": "JVM Arguments",
+            "description": "Additional Java Virtual Machine arguments.",
+            "env_variable": "JVM_ARGS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Enable Backups",
+            "description": "Enable automatic world backups.",
+            "env_variable": "ENABLE_BACKUPS",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Backup Directory",
+            "description": "Directory for backups (relative to server root).",
+            "env_variable": "BACKUP_DIR",
+            "default_value": "backups",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:128",
+            "field_type": "text"
+        },
+        {
+            "name": "Backup Frequency",
+            "description": "Backup frequency in minutes.",
+            "env_variable": "BACKUP_FREQUENCY",
+            "default_value": "30",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer|min:1",
+            "field_type": "text"
+        },
+        {
+            "name": "Allow Self Operator",
+            "description": "Allow players to use /op command to give themselves operator permissions.",
+            "env_variable": "ALLOW_OP",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        }
+    ]
+}

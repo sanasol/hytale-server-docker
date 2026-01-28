@@ -1,151 +1,30 @@
-[![Discord](https://img.shields.io/discord/1459154799407665397?label=Join%20Discord)](https://hybrowse.gg/discord)
-[![Docker Pulls](https://img.shields.io/docker/pulls/hybrowse/hytale-server)](https://hub.docker.com/r/hybrowse/hytale-server)
+# Hytale Server Docker
 
-# Hytale Server Docker Image
+**Production-ready Docker image for Hytale game servers with automatic download.**
 
-**🐳 Production-ready Docker image for dedicated Hytale servers.**
+No official Hytale authentication required - server files are downloaded automatically. Supports both F2P and official licensed clients.
 
-Automatic CurseForge mod management, auto-download with smart update detection, Helm chart, CLI, easy configuration, and quick troubleshooting.
-
-Brought to you by [Hybrowse](https://hybrowse.gg) and the developer of [setupmc.com](https://setupmc.com).
+[![Docker Image](https://img.shields.io/badge/ghcr.io-sanasol%2Fhytale--server--docker-blue)](https://ghcr.io/sanasol/hytale-server-docker)
 
 ---
 
-## Custom Auth Server Support (Experimental)
+## Quick Start (F2P Mode - Default)
 
-This fork includes support for custom authentication servers, allowing you to run a complete F2P Hytale setup.
+**No setup required!** Server downloads automatically on first run.
 
-> **Warning**: This is experimental and for educational purposes only.
+### Using Pre-built Image
 
-### Public Test Server (Default)
-
-**Works out of the box!** By default, all configurations use `sanasol.ws` - a public test auth server. You can start using this immediately without setting up your own authentication server.
-
-#### Quick Test (No Setup Required)
-
-1. **Download the pre-built launcher**: [Hytale F2P Launcher v2.0.2b](https://github.com/amiayweb/Hytale-F2P/releases/tag/v2.0.2b)
-2. **Connect to the public game server**: `ht.vboro.de:5720`
-
-No server setup needed - just download, launch, and play!
-
-- **All cosmetics unlocked** - full access to character customization
-- **Cosmetics saved by username** - your skin/cosmetic choices persist between sessions
-
-> **Note**: There is no password authentication - anyone can use any username. If you use a username someone else has used, you'll see their cosmetics. Use a unique username for testing.
-
-#### Build from Source
-
-Use the [Hytale F2P Launcher](https://github.com/amiayweb/Hytale-F2P) with default configuration (uses `sanasol.ws` by default with dual auth support).
-
-> **Note**: For production use or privacy, you can set up your own auth server using [hytale-auth-server](https://github.com/sanasol/hytale-auth-server).
-
-### Related Projects
-
-| Project | Description |
-|---------|-------------|
-| [hytale-auth-server](https://github.com/sanasol/hytale-auth-server) | Authentication server |
-| [Hytale F2P Launcher](https://github.com/amiayweb/Hytale-F2P) | Game launcher with dual auth support |
-| [hytale-server-docker](https://github.com/sanasol/hytale-server-docker) | Dedicated server Docker image (this repo) |
-
-### Custom Auth Features
-
-- **Automatic domain patching**: Patches `HytaleServer.jar` to use your custom auth domain
-- **Token auto-fetch**: Automatically fetches server tokens from your auth server on startup
-- **Configurable domain**: Set your 4-16 character domain via environment variable
-
-### Custom Auth Configuration
-
-```yaml
-services:
-  hytale:
-    build: .  # Build from this repo instead of using hybrowse image
-    environment:
-      # F2P auth (all URLs derived from domain automatically)
-      HYTALE_AUTH_DOMAIN: "auth.sanasol.ws"
-      # Standard configuration
-      HYTALE_AUTO_DOWNLOAD: "true"
-      HYTALE_AUTH_MODE: "authenticated"
-    ports:
-      - "5520:5520/udp"
-    volumes:
-      - ./data:/data
+**One-liner:**
+```bash
+docker run -d -p 5520:5520/udp -v ./data:/data --name hytale ghcr.io/sanasol/hytale-server-docker:latest
 ```
 
-> **Note**: `HYTALE_AUTH_DOMAIN` is all you need. Dual auth patching and token auto-fetch are enabled by default.
-
-### Quick Start (Using Public Test Server)
-
-Using the default `sanasol.ws` auth server - no auth server setup needed:
-
-1. **Start this dedicated server**:
-   ```bash
-   git clone https://github.com/sanasol/hytale-server-docker.git
-   cd hytale-server-docker
-   docker compose build
-   docker compose up -d
-   ```
-
-2. **Launch with the F2P launcher** ([Hytale F2P Launcher](https://github.com/amiayweb/Hytale-F2P)):
-   - Download from [releases](https://github.com/amiayweb/Hytale-F2P/releases/tag/v2.0.2b)
-   - Or build from source:
-   ```bash
-   git clone https://github.com/amiayweb/Hytale-F2P.git
-   cd Hytale-F2P
-   npm install
-   npm start
-   ```
-
-### Complete Setup (Own Auth Server)
-
-For running your own auth server with a custom domain:
-
-1. **Start the auth server** ([hytale-auth-server](https://github.com/sanasol/hytale-auth-server)):
-   ```bash
-   git clone https://github.com/sanasol/hytale-auth-server.git
-   cd hytale-auth-server
-   # Edit compose.yaml with your domain
-   docker compose up -d
-   ```
-
-2. **Start this dedicated server**:
-   ```bash
-   git clone https://github.com/sanasol/hytale-server-docker.git
-   cd hytale-server-docker
-   # Edit compose.yaml with your domain
-   docker compose build
-   docker compose up -d
-   ```
-
-3. **Launch with the F2P launcher** ([Hytale F2P Launcher](https://github.com/amiayweb/Hytale-F2P)):
-   - Download from [releases](https://github.com/amiayweb/Hytale-F2P/releases/tag/v2.0.2b)
-   - Or build from source:
-   ```bash
-   git clone https://github.com/amiayweb/Hytale-F2P.git
-   cd Hytale-F2P
-   npm install
-   # Set HYTALE_AUTH_DOMAIN=yourdomain environment variable
-   npm start
-   ```
-
----
-
-## Image
-
-- **Image (Docker Hub)**: [`hybrowse/hytale-server`](https://hub.docker.com/r/hybrowse/hytale-server)
-- **Mirror (GHCR)**: [`ghcr.io/hybrowse/hytale-server`](https://ghcr.io/hybrowse/hytale-server)
-
-## Community
-
-Join the **Hybrowse Discord Server** to get help and stay up to date: https://hybrowse.gg/discord
-
-## Quickstart
-
+**Or with Docker Compose:**
 ```yaml
+# compose.yaml
 services:
   hytale:
-    image: hybrowse/hytale-server:latest
-    environment:
-      HYTALE_AUTO_DOWNLOAD: "true"
+    image: ghcr.io/sanasol/hytale-server-docker:latest
     ports:
       - "5520:5520/udp"
     volumes:
@@ -159,76 +38,276 @@ services:
 docker compose up -d
 ```
 
-> [!IMPORTANT]
-> **Two authentication steps required:**
->
-> 1. **Downloader auth** (first run): follow the URL + device code in the logs to download server files
-> 2. **Server auth** (after startup): attach to the console (`docker compose attach hytale`), then run `/auth persistence Encrypted` followed by `/auth login device`
+First run will automatically download:
+- `HytaleServer.jar` (~80MB)
+- `Assets.zip` (~3.3GB)
 
-Full guide: [`docs/image/quickstart.md`](docs/image/quickstart.md)
-
-Troubleshooting: [`docs/image/troubleshooting.md`](docs/image/troubleshooting.md)
-
-Automation: you can send server console commands from scripts via `hytale-cli`:
+### Build from Source
 
 ```bash
-docker exec hytale hytale-cli send "/say Server is running!"
+git clone https://github.com/sanasol/hytale-server-docker.git
+cd hytale-server-docker
+docker compose up -d
 ```
 
-See: [`docs/image/configuration.md`](docs/image/configuration.md#send-console-commands-hytale-cli)
+---
+
+## Download Modes
+
+### F2P Download (Default)
+
+Downloads pre-patched server from F2P host. **No authentication required.**
+
+```yaml
+environment:
+  HYTALE_F2P_DOWNLOAD: "true"  # Default
+  HYTALE_F2P_DOWNLOAD_BASE: "https://download.sanasol.ws/download"
+```
+
+### Official Hytale Download
+
+Downloads from official Hytale servers. **Requires device code authentication.**
+
+```yaml
+environment:
+  HYTALE_F2P_DOWNLOAD: "false"
+  HYTALE_AUTO_DOWNLOAD: "true"
+```
+
+On first run, check logs for device code authentication URL.
+
+---
+
+## Configuration
+
+### Essential Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HYTALE_F2P_DOWNLOAD` | `true` | Enable F2P download (no auth required) |
+| `HYTALE_AUTO_DOWNLOAD` | `false` | Enable official Hytale download (requires auth) |
+| `HYTALE_AUTH_DOMAIN` | `auth.sanasol.ws` | F2P auth server domain |
+| `HYTALE_AUTH_MODE` | `authenticated` | Server auth mode |
+| `HYTALE_DUAL_AUTH` | `true` | Enable dual auth (official + F2P clients) |
+
+### F2P Download Options
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HYTALE_F2P_DOWNLOAD_BASE` | `https://download.sanasol.ws/download` | Base URL for downloads |
+| `HYTALE_F2P_AUTO_UPDATE` | `false` | Re-download files even if they exist |
+
+### Server Options
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HYTALE_BIND` | `0.0.0.0:5520` | Server bind address |
+| `HYTALE_SERVER_NAME` | `Hytale Server` | Server display name |
+| `JVM_XMS` | - | JVM min heap (e.g., `2G`) |
+| `JVM_XMX` | - | JVM max heap (e.g., `4G`) |
+
+### Full Configuration Example
+
+```yaml
+services:
+  hytale:
+    image: ghcr.io/sanasol/hytale-server-docker:latest
+    environment:
+      # Download mode (F2P = default)
+      HYTALE_F2P_DOWNLOAD: "true"
+
+      # Auth configuration
+      HYTALE_AUTH_DOMAIN: "auth.sanasol.ws"
+      HYTALE_AUTH_MODE: "authenticated"
+      HYTALE_DUAL_AUTH: "true"
+
+      # Server settings
+      HYTALE_SERVER_NAME: "My F2P Server"
+      HYTALE_ACCEPT_EARLY_PLUGINS: "true"
+
+      # JVM memory
+      JVM_XMS: "2G"
+      JVM_XMX: "4G"
+    ports:
+      - "5520:5520/udp"
+    volumes:
+      - ./data:/data
+      - ./backups:/backups
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
+```
+
+---
+
+## Dual Authentication
+
+By default, servers support **both** official Hytale clients and F2P clients simultaneously.
+
+### F2P Clients
+Connect directly using [Hytale F2P Launcher](https://github.com/amiayweb/Hytale-F2P) - no additional setup needed.
+
+### Official/Licensed Clients
+
+To allow players with official Hytale game licenses to connect, the **server admin** must run these commands in the **server console**:
+
+```
+/auth logout
+/auth persistence Encrypted
+/auth login device
+```
+
+Then complete the Hytale authentication process in your browser. This gives the server official Hytale tokens so it can authenticate licensed clients.
+
+> **Note**: This only needs to be done once per server. Tokens persist between restarts.
+
+### How It Works
+
+The server automatically:
+1. Patches the JAR for dual auth support
+2. Fetches F2P server tokens on startup
+3. Merges JWKS from both official and F2P backends
+4. Routes authentication based on token issuer
+
+---
+
+## CurseForge Mods
+
+Automatic mod management is supported:
+
+```yaml
+environment:
+  HYTALE_CURSEFORGE_MODS: "MOD_ID1 MOD_ID2"
+  HYTALE_CURSEFORGE_API_KEY: "$2a$10$..."
+```
+
+See [`docs/image/curseforge-mods.md`](docs/image/curseforge-mods.md) for details.
+
+---
+
+## Pterodactyl Panel
+
+Pterodactyl eggs for running Hytale servers on game panels.
+
+| Egg | Description | Auth Required |
+|-----|-------------|---------------|
+| [`egg-hytale-server.json`](pterodactyl/egg-hytale-server.json) | **Recommended** - Auto-downloads server | No |
+| [`egg-hytale-server-official.json`](pterodactyl/egg-hytale-server-official.json) | Downloads from official Hytale | Yes (device code) |
+
+**Quick setup:**
+1. Import egg in Admin Panel → Nests → Import Egg
+2. Create server with **UDP port** allocation (Hytale uses UDP)
+3. Start server - files download automatically
+
+See [`pterodactyl/README.md`](pterodactyl/README.md) for detailed documentation.
+
+---
+
+## Building & Publishing
+
+### Local Build
+
+```bash
+# Build for local use
+./build.sh
+
+# Build and push to GHCR
+./build.sh --push
+
+# Build with specific tag
+./build.sh --push --tag v1.0.0
+```
+
+### GitHub Actions
+
+Images are automatically built and pushed on:
+- Push to `main`/`master` branch
+- Version tags (`v*`)
+- Manual workflow dispatch
+
+---
+
+## Public Test Server
+
+Test without setting up your own server:
+
+1. Download [Hytale F2P Launcher](https://github.com/amiayweb/Hytale-F2P/releases/tag/v2.0.2b)
+2. Connect to: `ht.vboro.de:5720`
+
+Features:
+- All cosmetics unlocked
+- Cosmetics saved by username
+- No password (anyone can use any username)
+
+---
+
+## Related Projects
+
+| Project | Description |
+|---------|-------------|
+| [hytale-auth-server](https://github.com/sanasol/hytale-auth-server) | F2P Authentication server |
+| [Hytale F2P Launcher](https://github.com/amiayweb/Hytale-F2P) | Game launcher with F2P support |
+| [Server List](https://santale.top) | Hytale server listing |
+
+---
+
+## Troubleshooting
+
+### Server won't start
+
+```bash
+# Check logs
+docker compose logs -f hytale
+
+# Verify files downloaded
+ls -la data/
+ls -la data/server/
+```
+
+### Download fails
+
+1. Check internet connectivity
+2. Verify download URL is accessible:
+   ```bash
+   curl -I https://download.sanasol.ws/download/HytaleServer.jar
+   ```
+3. Try forcing re-download:
+   ```yaml
+   environment:
+     HYTALE_F2P_AUTO_UPDATE: "true"
+   ```
+
+### Dual auth not working
+
+1. Check if JAR is patched:
+   ```bash
+   docker exec hytale unzip -l /data/server/HytaleServer.jar | grep DualAuthContext
+   ```
+2. Delete patch flag and restart:
+   ```bash
+   rm data/server/.patched_dual_auth
+   docker compose restart
+   ```
+
+---
 
 ## Documentation
 
-- [`docs/image/quickstart.md`](docs/image/quickstart.md) — start here
-- [`docs/image/configuration.md`](docs/image/configuration.md) — environment variables, JVM tuning
-- [`docs/image/kubernetes.md`](docs/image/kubernetes.md) — Helm chart, Kustomize overlays, and Kubernetes deployment notes
-- [`docs/image/curseforge-mods.md`](docs/image/curseforge-mods.md) — automatic CurseForge mod download and updates
-- [`docs/image/troubleshooting.md`](docs/image/troubleshooting.md) — common issues
-- [`docs/image/backups.md`](docs/image/backups.md) — backup configuration
-- [`docs/image/server-files.md`](docs/image/server-files.md) — manual provisioning (arm64, etc.)
-- [`docs/image/upgrades.md`](docs/image/upgrades.md) — upgrade guidance
-- [`docs/image/security.md`](docs/image/security.md) — security hardening
+- [`pterodactyl/README.md`](pterodactyl/README.md) - Pterodactyl Panel setup
+- [`docs/image/quickstart.md`](docs/image/quickstart.md) - Getting started with Docker
+- [`docs/image/configuration.md`](docs/image/configuration.md) - All environment variables
+- [`docs/image/curseforge-mods.md`](docs/image/curseforge-mods.md) - Mod management
+- [`docs/image/troubleshooting.md`](docs/image/troubleshooting.md) - Common issues
+- [`docs/image/server-files.md`](docs/image/server-files.md) - Manual file provisioning
 
-## Why this image
+---
 
-- **Security-first defaults** (least privilege; credentials/tokens treated as secrets)
-- **Operator UX** (clear startup validation and actionable errors)
-- **Performance-aware** (sane JVM defaults; optional AOT cache usage)
-- **Predictable operations** (documented data layout and upgrade guidance)
-
-## Java
-
-Hytale requires **Java 25**.
-This image uses **Adoptium / Eclipse Temurin 25**.
-
-## Planned features
-
-See [`ROADMAP.md`](ROADMAP.md) for details. Highlights:
-
-- **Planned next**: graceful shutdown guidance, basic healthcheck (with a way to disable), diagnostics helpers, observability guidance, provider-grade patterns
- 
-## Documentation
- 
-- [`docs/image/`](docs/image/): Image usage & configuration
-- [`docs/hytale/`](docs/hytale/): internal notes (not end-user image docs)
- 
-## Contributing & Security
- 
-- [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- [`SECURITY.md`](SECURITY.md)
-
-## Local verification
-
-You can build and run basic container-level validation tests locally:
-
-```bash
-task verify
-```
-
-Install Task:
-
-- https://taskfile.dev/
- 
 ## License
- 
-See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+
+See [`LICENSE`](LICENSE).
+
+---
+
+## Credits
+
+Based on [Hybrowse/hytale-server-docker](https://github.com/Hybrowse/hytale-server-docker).

@@ -3,6 +3,10 @@ services:
     build: .
     platform: linux/amd64
     environment:
+      # F2P download configuration (default: enabled)
+      # Downloads pre-patched server from F2P host - no official auth required
+      HYTALE_F2P_DOWNLOAD: "true"
+      HYTALE_F2P_DOWNLOAD_BASE: "https://download.sanasol.ws/download"
       # F2P auth configuration (all endpoints derived from domain)
       HYTALE_AUTH_DOMAIN: "auth.sanasol.ws"
       HYTALE_SERVER_NAME: "DedicatedServer"
@@ -10,6 +14,8 @@ services:
       HYFIXES_DISABLE_CHUNK_UNLOAD: "true"
       HYTALE_ACCEPT_EARLY_PLUGINS: "true"
       HYTALE_AUTH_MODE: "authenticated"
+      # Official Hytale download (disabled by default, requires device code auth)
+      # To use official: set HYTALE_AUTO_DOWNLOAD=true and HYTALE_F2P_DOWNLOAD=false
       HYTALE_AUTO_DOWNLOAD: "false"
       HYTALE_ENABLE_BACKUP: "false"
       HYTALE_BACKUP_DIR: "/backups"
