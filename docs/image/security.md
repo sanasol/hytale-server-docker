@@ -14,9 +14,9 @@ This document describes security hardening recommendations for running the `hybr
 Treat these as secrets and avoid placing them in plain text config repositories:
 
 - `/data/.hytale-downloader-credentials.json`
-- `HYTALE_SERVER_SESSION_TOKEN`
-- `HYTALE_SERVER_IDENTITY_TOKEN`
 - CurseForge API key (`HYTALE_CURSEFORGE_API_KEY`)
+
+**Note:** F2P server tokens are auto-fetched by the patched JAR on startup - no manual token management required for F2P mode.
 
 Recommendations:
 

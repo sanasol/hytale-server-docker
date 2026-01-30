@@ -95,14 +95,13 @@ On first run, check logs for device code authentication URL.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HYTALE_F2P_DOWNLOAD_BASE` | `https://download.sanasol.ws/download` | Base URL for downloads |
-| `HYTALE_F2P_AUTO_UPDATE` | `false` | Re-download files even if they exist |
+| `HYTALE_F2P_AUTO_UPDATE` | `true` | Check for updates on restart (compares remote ETag) |
 
 ### Server Options
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HYTALE_BIND` | `0.0.0.0:5520` | Server bind address |
-| `HYTALE_SERVER_NAME` | `Hytale Server` | Server display name |
 | `JVM_XMS` | - | JVM min heap (e.g., `2G`) |
 | `JVM_XMX` | - | JVM max heap (e.g., `4G`) |
 
@@ -122,7 +121,6 @@ services:
       HYTALE_DUAL_AUTH: "true"
 
       # Server settings
-      HYTALE_SERVER_NAME: "My F2P Server"
       HYTALE_ACCEPT_EARLY_PLUGINS: "true"
 
       # JVM memory
@@ -164,8 +162,8 @@ Then complete the Hytale authentication process in your browser. This gives the 
 ### How It Works
 
 The server automatically:
-1. Patches the JAR for dual auth support
-2. Fetches F2P server tokens on startup
+1. Downloads pre-patched JAR with dual auth support (or patches on first run)
+2. Auto-fetches F2P server tokens internally (no external scripts needed)
 3. Merges JWKS from both official and F2P backends
 4. Routes authentication based on token issuer
 

@@ -292,18 +292,8 @@ if is_true "${HYTALE_DUAL_AUTH:-true}"; then
   /usr/local/bin/hytale-patch-dual-auth "${HYTALE_SERVER_JAR}" || log "WARNING: Dual auth patching failed"
 fi
 
-# Fetch server tokens from auth server if not already set and auto-fetch is enabled
-if is_true "${HYTALE_AUTO_FETCH_TOKENS:-true}"; then
-  if [ -z "${HYTALE_SERVER_SESSION_TOKEN:-}" ] || [ -z "${HYTALE_SERVER_IDENTITY_TOKEN:-}" ]; then
-    log "Fetching server tokens from auth server..."
-    /usr/local/bin/hytale-fetch-tokens || true
-    # Source the tokens if fetch succeeded
-    if [ -f /tmp/server_tokens.env ]; then
-      . /tmp/server_tokens.env
-      export HYTALE_SERVER_SESSION_TOKEN HYTALE_SERVER_IDENTITY_TOKEN
-    fi
-  fi
-fi
+# NOTE: Server tokens are auto-fetched by DualServerTokenManager in the patched JAR
+# No need to pre-fetch tokens - the server handles this automatically on startup
 
 /usr/local/bin/hytale-cfg-interpolate
 
@@ -339,14 +329,6 @@ fi
 
 if [ -n "${TZ:-}" ]; then
   log "- TZ: ${TZ}"
-fi
-
-if [ -n "${HYTALE_SERVER_SESSION_TOKEN:-}" ]; then
-  log "- Session token: [set]"
-fi
-
-if [ -n "${HYTALE_SERVER_IDENTITY_TOKEN:-}" ]; then
-  log "- Identity token: [set]"
 fi
 
 set -- java
@@ -552,13 +534,8 @@ if [ -n "${user_args}" ]; then
   set -- "$@" ${user_args}
 fi
 
-if [ -n "${HYTALE_SERVER_SESSION_TOKEN:-}" ]; then
-  set -- "$@" --session-token "${HYTALE_SERVER_SESSION_TOKEN}"
-fi
-
-if [ -n "${HYTALE_SERVER_IDENTITY_TOKEN:-}" ]; then
-  set -- "$@" --identity-token "${HYTALE_SERVER_IDENTITY_TOKEN}"
-fi
+# NOTE: Server tokens are auto-fetched by DualServerTokenManager
+# No need to pass --session-token or --identity-token
 
 # Console mode:
 # - HYTALE_CONSOLE_PIPE=true: Use FIFO for programmatic input (docker exec hytale-cli)

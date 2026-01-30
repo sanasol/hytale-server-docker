@@ -42,9 +42,8 @@ COPY scripts/curseforge-mods.sh /usr/local/bin/hytale-curseforge-mods
 COPY scripts/prestart-downloads.sh /usr/local/bin/hytale-prestart-downloads
 COPY scripts/hytale-cli.sh /usr/local/bin/hytale-cli
 COPY scripts/healthcheck.sh /usr/local/bin/hytale-healthcheck
-COPY scripts/fetch-server-tokens.sh /usr/local/bin/hytale-fetch-tokens
 COPY scripts/patch-dual-auth.sh /usr/local/bin/hytale-patch-dual-auth
-RUN chmod 0755 /usr/local/bin/hytale-entrypoint /usr/local/bin/hytale-cfg-interpolate /usr/local/bin/hytale-auto-download /usr/local/bin/hytale-f2p-download /usr/local/bin/hytale-curseforge-mods /usr/local/bin/hytale-prestart-downloads /usr/local/bin/hytale-cli /usr/local/bin/hytale-healthcheck /usr/local/bin/hytale-fetch-tokens /usr/local/bin/hytale-patch-dual-auth
+RUN chmod 0755 /usr/local/bin/hytale-entrypoint /usr/local/bin/hytale-cfg-interpolate /usr/local/bin/hytale-auto-download /usr/local/bin/hytale-f2p-download /usr/local/bin/hytale-curseforge-mods /usr/local/bin/hytale-prestart-downloads /usr/local/bin/hytale-cli /usr/local/bin/hytale-healthcheck /usr/local/bin/hytale-patch-dual-auth
 
 # Install patcher (pre-compiled from build stage)
 # Copy all class files including any inner classes (DualAuthPatcher$*.class)

@@ -40,16 +40,21 @@ On arm64 hosts (for example Apple Silicon), you can also run the container as `l
 In `HYTALE_AUTH_MODE=authenticated` mode, the server must be authenticated after startup before players can connect.
 This is separate from the downloader OAuth flow used for auto-download.
 
+**F2P Mode (default):** Server tokens are auto-fetched by the patched JAR on startup. No manual setup required.
+
+**Official Hytale clients:** To allow players with official Hytale game licenses to connect, run these commands in the server console:
+```
+/auth logout
+/auth persistence Encrypted
+/auth login device
+```
+
 To persist authentication across server restarts, run `/auth persistence Encrypted` before `/auth login device`.
 Without this, you will need to re-authenticate after every container restart.
 
 See:
 
 - [`quickstart.md`](quickstart.md)
-
-Advanced (providers / fleets):
-
-- [`../hytale/server-provider-auth.md`](../hytale/server-provider-auth.md) (tokens via `HYTALE_SERVER_SESSION_TOKEN` / `HYTALE_SERVER_IDENTITY_TOKEN`)
 
 ## Mods
 
@@ -247,8 +252,6 @@ In JSON:
 | `HYTALE_BACKUP_DIR` | *(empty)* | Passed as `--backup-dir`. |
 | `HYTALE_BACKUP_FREQUENCY_MINUTES` | `30` | Passed as `--backup-frequency`. |
 | `HYTALE_BACKUP_MAX_COUNT` | `5` | Passed as `--backup-max-count`. |
-| `HYTALE_SERVER_SESSION_TOKEN` | *(empty)* | Passed as `--session-token` (**secret**). |
-| `HYTALE_SERVER_IDENTITY_TOKEN` | *(empty)* | Passed as `--identity-token` (**secret**). |
 | `HYTALE_AUTO_DOWNLOAD` | `false` | If `true`, downloads server files and `Assets.zip` via the official Hytale Downloader when missing. |
 | `HYTALE_AUTO_UPDATE` | `true` | If `true`, checks for updates on each start (compares remote version vs local). Only downloads when an update is available. |
 | `HYTALE_CONSOLE_PIPE` | `true` | If `true`, enables the console command pipe used by `hytale-cli`. If `false`, the server uses normal stdin and `hytale-cli` is disabled. |
@@ -273,10 +276,6 @@ In JSON:
 | `EXTRA_SERVER_ARGS` | *(empty)* | Extra server args appended at the end. |
 | `HYTALE_DUAL_AUTH` | `true` | If `true`, enables dual authentication (official hytale.com + F2P). Patches JAR on startup. |
 | `HYTALE_AUTH_DOMAIN` | `auth.sanasol.ws` | F2P authentication domain (4-16 chars). All F2P traffic routes to single endpoint `https://{domain}`. |
-| `HYTALE_AUTO_FETCH_TOKENS` | `true` | If `true` and tokens not set, fetches server tokens from F2P auth server on startup. |
-| `HYTALE_AUTH_SERVER_URL` | *(auto)* | Override the F2P auth server URL. Defaults to `https://{HYTALE_AUTH_DOMAIN}`. |
-| `HYTALE_SERVER_ID` | *(auto)* | Server UUID for token requests. Auto-generated and persisted in `/data/.server-id` if not set. |
-| `HYTALE_SERVER_NAME` | `Hytale Server` | Server name for token requests. |
 | `HYTALE_ALLOW_OP` | `true` | If `true`, enables the `/op` command. |
 | `HYTALE_BARE` | `false` | If `true`, passes `--bare`. |
 | `HYTALE_BOOT_COMMAND` | *(empty)* | Passed as `--boot-command`. |

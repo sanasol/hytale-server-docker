@@ -34,12 +34,15 @@ HYTALE_SERVER_JAR="${HYTALE_SERVER_JAR:-${SERVER_DIR}/HytaleServer.jar}"
 HYTALE_ASSETS_PATH="${HYTALE_ASSETS_PATH:-${DATA_DIR}/Assets.zip}"
 
 # F2P download configuration
-# Default to auth.sanasol.ws which is the unified F2P auth endpoint
 HYTALE_F2P_DOWNLOAD_BASE="${HYTALE_F2P_DOWNLOAD_BASE:-https://download.sanasol.ws/download}"
 HYTALE_F2P_DOWNLOAD_LOCK="${HYTALE_F2P_DOWNLOAD_LOCK:-true}"
-HYTALE_F2P_AUTO_UPDATE="${HYTALE_F2P_AUTO_UPDATE:-false}"
+HYTALE_F2P_AUTO_UPDATE="${HYTALE_F2P_AUTO_UPDATE:-true}"
+
+# Version tracking directory
+VERSION_DIR="${DATA_DIR}/.hytale-f2p-versions"
 
 mkdir -p "${SERVER_DIR}"
+mkdir -p "${VERSION_DIR}"
 check_dir_writable "${SERVER_DIR}"
 
 # Lock to avoid multiple containers downloading into the same volume simultaneously.
@@ -92,19 +95,91 @@ else
   log "F2P download: download lock disabled via HYTALE_F2P_DOWNLOAD_LOCK=false"
 fi
 
-# Check if files already present
-server_files_present=0
-if [ -f "${HYTALE_SERVER_JAR}" ] && [ -f "${HYTALE_ASSETS_PATH}" ]; then
-  server_files_present=1
-  if ! is_true "${HYTALE_F2P_AUTO_UPDATE}"; then
-    log "F2P download: server files already present and HYTALE_F2P_AUTO_UPDATE=false; skipping"
-    exit 0
+# Get remote ETag/Last-Modified for a URL (follows redirects)
+get_remote_version() {
+  _url="$1"
+  # Try ETag first, fall back to Last-Modified, then Content-Length as last resort
+  _headers=$(curl -sI -L "${_url}" 2>/dev/null | tr -d '\r')
+  _etag=$(echo "${_headers}" | grep -i "^etag:" | tail -1 | sed 's/^[^:]*: *//' | tr -d '"')
+  if [ -n "${_etag}" ]; then
+    printf '%s' "${_etag}"
+    return 0
   fi
-  log "F2P download: server files already present; HYTALE_F2P_AUTO_UPDATE=true, re-downloading"
-fi
+  _lastmod=$(echo "${_headers}" | grep -i "^last-modified:" | tail -1 | sed 's/^[^:]*: *//')
+  if [ -n "${_lastmod}" ]; then
+    printf '%s' "${_lastmod}"
+    return 0
+  fi
+  _length=$(echo "${_headers}" | grep -i "^content-length:" | tail -1 | sed 's/^[^:]*: *//')
+  if [ -n "${_length}" ]; then
+    printf 'size:%s' "${_length}"
+    return 0
+  fi
+  return 1
+}
+
+# Check if file needs update (returns 0 if update needed, 1 if up-to-date)
+needs_update() {
+  _url="$1"
+  _dest="$2"
+  _name="$3"
+  _version_file="${VERSION_DIR}/${_name}.version"
+
+  # File doesn't exist - needs download
+  if [ ! -f "${_dest}" ]; then
+    log "F2P download: ${_name} not found, will download"
+    return 0
+  fi
+
+  # Auto-update disabled - skip check
+  if ! is_true "${HYTALE_F2P_AUTO_UPDATE}"; then
+    log "F2P download: ${_name} exists and HYTALE_F2P_AUTO_UPDATE=false, skipping"
+    return 1
+  fi
+
+  # Get remote version
+  _remote_version=$(get_remote_version "${_url}" 2>/dev/null) || true
+  if [ -z "${_remote_version}" ]; then
+    log "F2P download: could not get remote version for ${_name}, skipping update check"
+    return 1
+  fi
+
+  # Get stored version
+  _local_version=""
+  if [ -f "${_version_file}" ]; then
+    _local_version=$(cat "${_version_file}" 2>/dev/null) || true
+  fi
+
+  # Compare versions
+  if [ "${_remote_version}" = "${_local_version}" ]; then
+    log "F2P download: ${_name} is up-to-date (version: ${_remote_version})"
+    return 1
+  fi
+
+  if [ -n "${_local_version}" ]; then
+    log "F2P download: ${_name} has update available"
+    log "F2P download:   local:  ${_local_version}"
+    log "F2P download:   remote: ${_remote_version}"
+  else
+    log "F2P download: ${_name} exists but no version recorded, checking for update"
+  fi
+  return 0
+}
+
+# Save version after successful download
+save_version() {
+  _url="$1"
+  _name="$2"
+  _version_file="${VERSION_DIR}/${_name}.version"
+
+  _remote_version=$(get_remote_version "${_url}" 2>/dev/null) || true
+  if [ -n "${_remote_version}" ]; then
+    printf '%s\n' "${_remote_version}" > "${_version_file}"
+    log "F2P download: saved version for ${_name}: ${_remote_version}"
+  fi
+}
 
 # Download function with retries and line-by-line progress
-# Progress is printed on new lines so it shows in Docker logs
 download_file() {
   _url="$1"
   _dest="$2"
@@ -122,7 +197,7 @@ download_file() {
   for _attempt in 1 2 3; do
     rm -f "${_tmp_dest}" 2>/dev/null || true
 
-    # Start curl in background (silent mode)
+    # Start curl in background (silent mode, follow redirects)
     curl -fL -s -o "${_tmp_dest}" "${_url}" &
     _curl_pid=$!
 
@@ -180,21 +255,27 @@ download_file() {
   return 1
 }
 
-# Download HytaleServer.jar if missing
-if [ ! -f "${HYTALE_SERVER_JAR}" ] || is_true "${HYTALE_F2P_AUTO_UPDATE}"; then
-  JAR_URL="${HYTALE_F2P_DOWNLOAD_BASE}/HytaleServer.jar"
-  if ! download_file "${JAR_URL}" "${HYTALE_SERVER_JAR}" "HytaleServer.jar" "80"; then
+# Download HytaleServer.jar if missing or outdated
+JAR_URL="${HYTALE_F2P_DOWNLOAD_BASE}/HytaleServer.jar"
+if needs_update "${JAR_URL}" "${HYTALE_SERVER_JAR}" "HytaleServer.jar"; then
+  if download_file "${JAR_URL}" "${HYTALE_SERVER_JAR}" "HytaleServer.jar" "80"; then
+    save_version "${JAR_URL}" "HytaleServer.jar"
+    # Clear dual auth flag so patcher re-verifies the new JAR
+    rm -f "${SERVER_DIR}/.patched_dual_auth" 2>/dev/null || true
+  else
     log "ERROR: Failed to download HytaleServer.jar"
     log "ERROR: Check if ${JAR_URL} is accessible"
     exit 1
   fi
 fi
 
-# Download Assets.zip if missing
-if [ ! -f "${HYTALE_ASSETS_PATH}" ] || is_true "${HYTALE_F2P_AUTO_UPDATE}"; then
-  ASSETS_URL="${HYTALE_F2P_DOWNLOAD_BASE}/Assets.zip"
+# Download Assets.zip if missing or outdated
+ASSETS_URL="${HYTALE_F2P_DOWNLOAD_BASE}/Assets.zip"
+if needs_update "${ASSETS_URL}" "${HYTALE_ASSETS_PATH}" "Assets.zip"; then
   log "F2P download: Assets.zip is a large file, this may take a while..."
-  if ! download_file "${ASSETS_URL}" "${HYTALE_ASSETS_PATH}" "Assets.zip" "3300"; then
+  if download_file "${ASSETS_URL}" "${HYTALE_ASSETS_PATH}" "Assets.zip" "3300"; then
+    save_version "${ASSETS_URL}" "Assets.zip"
+  else
     log "ERROR: Failed to download Assets.zip"
     log "ERROR: Check if ${ASSETS_URL} is accessible"
     exit 1
