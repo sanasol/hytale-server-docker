@@ -90,6 +90,15 @@ On first run, check logs for device code authentication URL.
 | `HYTALE_AUTH_MODE` | `authenticated` | Server auth mode |
 | `HYTALE_DUAL_AUTH` | `true` | Enable dual auth (official + F2P clients) |
 
+### Omni-Auth (Decentralized) Options
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HYTALE_TRUST_ALL_ISSUERS` | `true` | Accept tokens from any issuer with embedded JWK |
+| `HYTALE_TRUSTED_ISSUERS` | *(empty)* | Comma-separated allowlist when TRUST_ALL=false |
+
+See [Omni-Auth Documentation](https://github.com/sanasol/hytale-auth-server/blob/master/patcher/OMNI_AUTH.md) for implementation details.
+
 ### F2P Download Options
 
 | Variable | Default | Description |
@@ -166,6 +175,20 @@ The server automatically:
 2. Auto-fetches F2P server tokens internally (no external scripts needed)
 3. Merges JWKS from both official and F2P backends
 4. Routes authentication based on token issuer
+
+### Omni-Auth (Decentralized Clients)
+
+The server also supports **Omni-Auth** - clients that generate their own self-signed tokens with embedded JWK keys. This enables fully decentralized authentication without any central server.
+
+By default (`HYTALE_TRUST_ALL_ISSUERS=true`), any Omni-Auth client is accepted. For stricter control:
+
+```yaml
+environment:
+  HYTALE_TRUST_ALL_ISSUERS: "false"
+  HYTALE_TRUSTED_ISSUERS: "127.0.0.1,localhost,myauth.example.com"
+```
+
+See [Omni-Auth Documentation](https://github.com/sanasol/hytale-auth-server/blob/master/patcher/OMNI_AUTH.md) for implementation details.
 
 ---
 

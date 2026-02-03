@@ -19,8 +19,15 @@
 # - DualServerTokenManager: Stores both official and F2P token sets
 #
 # Environment variables:
-# - HYTALE_AUTH_DOMAIN: F2P domain (default: sanasol.ws)
+# - HYTALE_AUTH_DOMAIN: F2P domain (default: auth.sanasol.ws)
 # - HYTALE_SERVER_AUDIENCE: Server UUID for token requests
+# - HYTALE_TRUST_ALL_ISSUERS: Accept any issuer (default: true). Set to false for strict mode.
+# - HYTALE_TRUSTED_ISSUERS: Comma-separated allowlist of trusted issuers (used when TRUST_ALL=false)
+#
+# Omni-Auth (Decentralized):
+# - When TRUST_ALL_ISSUERS=true (default), any client with embedded JWK tokens is accepted
+# - When TRUST_ALL_ISSUERS=false, only issuers in TRUSTED_ISSUERS allowlist are accepted
+# - See: https://github.com/sanasol/hytale-auth-server/blob/master/patcher/OMNI_AUTH.md
 
 set -e
 
