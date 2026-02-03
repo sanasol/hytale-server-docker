@@ -137,6 +137,26 @@
             "user_editable": true,
             "rules": "required|boolean",
             "field_type": "text"
+        },
+        {
+            "name": "Trust All Issuers (Omni-Auth)",
+            "description": "Accept tokens from any issuer with embedded JWK. Set to 0 to require TRUSTED_ISSUERS allowlist.",
+            "env_variable": "HYTALE_TRUST_ALL_ISSUERS",
+            "default_value": "true",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:true,false",
+            "field_type": "text"
+        },
+        {
+            "name": "Trusted Issuers (Allowlist)",
+            "description": "Comma-separated list of trusted issuers when Trust All is disabled. Example: 127.0.0.1,localhost,myauth.com",
+            "env_variable": "HYTALE_TRUSTED_ISSUERS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
         }
     ]
 }
