@@ -596,6 +596,26 @@ fi
 
 cd "${SERVER_DIR}"
 
+# Replay must precede native player loading and the YAS/Essentials cache constructors.
+COMMERCE_RECOVERY_JAR="${HYTALE_COMMERCE_RECOVERY_JAR:-${SERVER_DIR}/.commerce-recovery.jar}"
+if [ -f "${COMMERCE_RECOVERY_JAR}" ] || [ -n "${HYTALE_COMMERCE_RECOVERY_JAR:-}" ]; then
+  if [ ! -f "${COMMERCE_RECOVERY_JAR}" ]; then
+    log "ERROR: Required commerce recovery artifact is missing."
+    exit 1
+  fi
+  if [ ! -f "${COMMERCE_RECOVERY_JAR}.sha256" ] || ! sha256sum -c "${COMMERCE_RECOVERY_JAR}.sha256"; then
+    log "ERROR: Commerce recovery artifact checksum is missing or mismatched."
+    exit 1
+  fi
+  java -cp "${COMMERCE_RECOVERY_JAR}:${HYTALE_SERVER_JAR}" ws.sanasol.adventure.CommerceRecover "${SERVER_DIR}"
+else
+  for pending in "${SERVER_DIR}"/.commerce-commit/*.pending; do
+    [ -e "${pending}" ] || continue
+    log "ERROR: Pending commerce commit requires HYTALE_COMMERCE_RECOVERY_JAR before server startup."
+    exit 1
+  done
+fi
+
 if is_true "${HYTALE_CONSOLE_PIPE:-false}"; then
   CONSOLE_FIFO="${HYTALE_CONSOLE_FIFO:-/tmp/hytale-console.fifo}"
 

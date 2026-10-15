@@ -1,0 +1,7 @@
+# Extend the pinned deployed runtime without changing its native or DualAuth binaries.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+USER root
+COPY scripts/entrypoint.sh /usr/local/bin/hytale-entrypoint
+RUN chmod 0755 /usr/local/bin/hytale-entrypoint
+USER hytale
